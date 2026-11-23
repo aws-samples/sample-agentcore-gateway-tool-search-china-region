@@ -1,0 +1,23 @@
+{
+  "source": "Synthetic test input for the supported metadata subset; not a service capture.",
+  "status": "READY",
+  "tool": {
+    "name": "search_tools",
+    "description": "Discover authorized tools",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string"
+        },
+        "_auth_context": {
+          "type": "string",
+          "description": "Server-managed signed context. Clients must omit this field."
+        }
+      },
+      "required": [
+        "query"
+      ]
+    }
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "app": "PYTHONPATH=src .venv/bin/python -m infra.app",
+  "versionReporting": false,
+  "pathMetadata": false,
+  "context": {
+    "config": "infra/config.example.json"
+  }
+}

@@ -1,0 +1,6 @@
+include scripts/build_dictionary.py
+include build_inputs/jieba-0.42.1/dict.txt
+include build_inputs/jieba-0.42.1/PKG-INFO
+include build_inputs/jieba-0.42.1/README.md
+include build_inputs/jieba-0.42.1/LICENSE
+exclude src/semantic_core/data/jieba-prefix-*.json

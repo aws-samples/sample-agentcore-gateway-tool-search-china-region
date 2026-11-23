@@ -1,0 +1,14 @@
+# Generated outputs and dependencies are not project source.
+/.git/
+/.venv/
+/.uv-cache/
+/.npm-cache/
+/.artifacts/
+/.worktrees/
+/node_modules/
+/dist/
+/build/
+/*.egg-info/
+# Local regression subset only. Nested product directories remain in scope.
+# Root tests use the explicitly scoped Bandit test policy.
+/tests/

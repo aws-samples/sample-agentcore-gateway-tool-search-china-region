@@ -1,0 +1,83 @@
+{
+  "revision": "16b9e6d45f10649f6a531ec4838ed9924372c3bc",
+  "rules": [
+    {
+      "id": "dangerous-subprocess-use-audit",
+      "path": "python/lang/security/audit/dangerous-subprocess-use-audit.yaml",
+      "sha256": "50f69dc35f47e405633559f54fc2b3bd344707221742400e74b1c902c1f76faa",
+      "rule_sha256": "56f812e36c20cf457d324c0807fd1e3b7cd984a4b13d2fcc5dfcba97ea822f14"
+    },
+    {
+      "id": "dangerous-subprocess-use-tainted-env-args",
+      "path": "python/lang/security/audit/dangerous-subprocess-use-tainted-env-args.yaml",
+      "sha256": "0f3f3f8fafef5b828a15253585e4c6648c46c6fd1cca4b0ae8c70a9399def44d",
+      "rule_sha256": "95ca9cf225a3c9d7da7c756333b99e59d9d55d6b5a6dce696393cc08c640f6f5"
+    },
+    {
+      "id": "dynamic-urllib-use-detected",
+      "path": "python/lang/security/audit/dynamic-urllib-use-detected.yaml",
+      "sha256": "02473766fa7c92a516db26d5dd0881f9dcc62ef10b0804565a0e5af2c9c5568a",
+      "rule_sha256": "f1f841b4f59410774bf4b8899c83f0ae10002062e928f908070ffc28b35926bd"
+    },
+    {
+      "id": "exec-detected",
+      "path": "python/lang/security/audit/exec-detected.yaml",
+      "sha256": "4f104a4f848ec09d02ec1317458572a6f581aba21bc884f2ea07503a1478095f",
+      "rule_sha256": "e7f36f8efd1b2cc5bdf1227537e83631bb30b574e199fdfc6f2056b6526f4746"
+    },
+    {
+      "id": "httpsconnection-detected",
+      "path": "python/lang/security/audit/httpsconnection-detected.yaml",
+      "sha256": "5918e45c3d8db0ada0f6db2d90f9805abb01ec4e5e69b398d31eff531bbbb831",
+      "rule_sha256": "c73c25d1646337609d24a82d7bcc25b19a9884bb77003345cb256605eb2e796d"
+    },
+    {
+      "id": "is-function-without-parentheses",
+      "path": "python/lang/maintainability/is-function-without-parentheses.yaml",
+      "sha256": "bcecf4f46f6e87b049bfe79784aacdcb627eff6622c4916be6400072019dd281",
+      "rule_sha256": "1a57d28d8b82f6282a46a81415d44336ccd922e9c789dc29166e42a232d71f5e"
+    },
+    {
+      "id": "missing-image-version",
+      "path": "dockerfile/best-practice/missing-image-version.yaml",
+      "sha256": "2fef6bc45f29a6c46496c061c773c3b0168b97febc1a5d903fb8adc00b55c521",
+      "rule_sha256": "23ed88d001bda02d2fba7bd75d834d58acf8b6ccc11b072c06eb98b9e42c090b"
+    },
+    {
+      "id": "non-literal-import",
+      "path": "python/lang/security/audit/non-literal-import.yaml",
+      "sha256": "056752dd8dfb6a695e4c9cd6ff64ebf8ff63bfc519d2ee1729f636b77c620497",
+      "rule_sha256": "deb4861c9d96be53ad6a20a0912363bccbc2e2597b9e4e3b25fd59a086e8db94"
+    },
+    {
+      "id": "pass-body-range",
+      "path": "python/lang/best-practice/pass-body.yaml",
+      "sha256": "13e8f634e89b635d910176a86fa9fdfb2a1b8adfdd6b952bbd7130a9747146aa",
+      "rule_sha256": "be3fc06deacdb1fd36b575dd37e56b60cc246c4687554faac9be847894308657"
+    },
+    {
+      "id": "python37-compatibility-importlib2",
+      "path": "python/lang/compatibility/python37.yaml",
+      "sha256": "cc868ab5982ae6db7327d4b160a504188e72f64975eac8b7bd40bfc6d1e78b0c",
+      "rule_sha256": "06dbb33f4b0f39a421af89ea57d0185db87f99b20482d0d0e7cf0a4dbb004221"
+    },
+    {
+      "id": "return-not-in-function",
+      "path": "python/lang/maintainability/return.yaml",
+      "sha256": "d1b7a05811649bbeb6c570899ce46d5cdf46ed834441be4ab2a49a8fef16b5d3",
+      "rule_sha256": "955e65c4360e83acb661b93d74ad5e9123e0f4fd184a0fe5e04cb36f721e9cac"
+    },
+    {
+      "id": "string-concat-in-list",
+      "path": "python/lang/correctness/common-mistakes/string-concat-in-list.yaml",
+      "sha256": "916965eefaf365c487889da5ab3d6fef39030e6e019f549a677cb823c9514929",
+      "rule_sha256": "733a30bd167da8880035b3421015a80726e3752e0ba9c22712747cb3e8ee1147"
+    },
+    {
+      "id": "useless-inner-function",
+      "path": "python/lang/maintainability/useless-innerfunction.yaml",
+      "sha256": "f22a8ee4d89c21937e619f41378195c7579b85bbccc16e9405c4dd2ce84de7a3",
+      "rule_sha256": "737e73a733c346f1509fba7aa33a9de1976426b2463347b3706a27a87bcdf976"
+    }
+  ]
+}

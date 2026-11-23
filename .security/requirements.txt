@@ -1,0 +1,7 @@
+# Isolated scanning tools only; never install into the application environment/image.
+semgrep==1.184.0
+bandit==1.9.4
+checkov==3.4.3
+# Direct imports used by the pinned-rule downloader; already present in the lock.
+httpx==0.28.1
+pyyaml==6.0.3

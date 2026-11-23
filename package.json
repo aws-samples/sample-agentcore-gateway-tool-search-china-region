@@ -1,0 +1,13 @@
+{
+  "name": "semsearch-infrastructure",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Worktree-local infrastructure CLI",
+  "license": "MIT-0",
+  "devDependencies": {
+    "aws-cdk": "2.1145.0"
+  },
+  "scripts": {
+    "cdk": "cdk"
+  }
+}

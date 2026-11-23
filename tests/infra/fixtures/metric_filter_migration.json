@@ -1,0 +1,83 @@
+{
+  "source": "Independently authored synthetic filters and log groups for safe migration tests; not a deployment capture.",
+  "resources": {
+    "SyntheticEcsLogs": {
+      "Type": "AWS::Logs::LogGroup",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "LogGroupName": "sample-tool-search-ecs-search-logs",
+        "RetentionInDays": 30
+      }
+    },
+    "SyntheticEcsBm25Filter": {
+      "Type": "AWS::Logs::MetricFilter",
+      "Properties": {
+        "FilterName": "sample-tool-search-retrieval-bm25-ecs",
+        "FilterPattern": "{ $.operation = \"search\" && $.ranking_mode = \"bm25\" }",
+        "LogGroupName": {
+          "Ref": "SyntheticEcsLogs"
+        },
+        "MetricTransformations": [
+          {
+            "MetricName": "retrieval-bm25",
+            "MetricNamespace": "semsearch/sample-tool-search",
+            "MetricValue": "1"
+          }
+        ]
+      }
+    },
+    "SyntheticFallbackLogs": {
+      "Type": "AWS::Logs::LogGroup",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "LogGroupName": "sample-tool-search-fallback-logs",
+        "RetentionInDays": 30
+      }
+    },
+    "SyntheticFallbackBm25Filter": {
+      "Type": "AWS::Logs::MetricFilter",
+      "Properties": {
+        "FilterName": "sample-tool-search-retrieval-bm25-fallback",
+        "FilterPattern": "{ $.operation = \"search\" && $.ranking_mode = \"bm25\" }",
+        "LogGroupName": {
+          "Ref": "SyntheticFallbackLogs"
+        },
+        "MetricTransformations": [
+          {
+            "MetricName": "retrieval-bm25",
+            "MetricNamespace": "semsearch/sample-tool-search",
+            "MetricValue": "1"
+          }
+        ]
+      }
+    },
+    "SyntheticSearchLogs": {
+      "Type": "AWS::Logs::LogGroup",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "LogGroupName": "sample-tool-search-search-logs",
+        "RetentionInDays": 30
+      }
+    },
+    "SyntheticSearchBm25Filter": {
+      "Type": "AWS::Logs::MetricFilter",
+      "Properties": {
+        "FilterName": "sample-tool-search-retrieval-bm25",
+        "FilterPattern": "{ $.operation = \"search\" && $.ranking_mode = \"bm25\" }",
+        "LogGroupName": {
+          "Ref": "SyntheticSearchLogs"
+        },
+        "MetricTransformations": [
+          {
+            "MetricName": "retrieval-bm25",
+            "MetricNamespace": "semsearch/sample-tool-search",
+            "MetricValue": "1"
+          }
+        ]
+      }
+    }
+  }
+}

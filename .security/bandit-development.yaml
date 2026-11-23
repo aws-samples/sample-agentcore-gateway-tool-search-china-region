@@ -1,0 +1,7 @@
+# Only scripts, reports, examples, src/semantic_eval and setup.py.
+# B101: offline benchmark/build assertions are internal invariants, not authorization.
+# B311: seeded evaluation sampling and retry jitter require reproducibility, not secrecy.
+# B404/B603/B607: local developer subprocesses; ERROR-level call sites are separately
+# audited by Semgrep, use list argv/shell=False and validate external arguments.
+# B105/B106/B110/B102 remain enabled in developer tools.
+skips: [B101, B311, B404, B603, B607]

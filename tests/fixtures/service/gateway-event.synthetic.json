@@ -1,0 +1,40 @@
+{
+  "provenance": {
+    "kind": "synthetic-from-public-documentation",
+    "live_gateway_observation": false,
+    "mcp_id_policy": "Exact JSON type and value; no string/integer coercion.",
+    "lambda_reference": "https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-add-target-lambda.html",
+    "interceptor_reference": "https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-interceptors-types.html"
+  },
+  "event": {
+    "query": "cancel"
+  },
+  "context_custom": {
+    "bedrockAgentCoreMessageVersion": "1.0",
+    "bedrockAgentCoreAwsRequestId": "request-fixture",
+    "bedrockAgentCoreMcpMessageId": "mcp-1",
+    "bedrockAgentCoreGatewayId": "gateway-fixture",
+    "bedrockAgentCoreTargetId": "search-target",
+    "bedrockAgentCoreToolName": "discovery___search_tools"
+  },
+  "interceptor": {
+    "interceptorInputVersion": "1.0",
+    "mcp": {
+      "rawGatewayRequest": {"body": ""},
+      "gatewayRequest": {
+        "path": "/mcp",
+        "httpMethod": "POST",
+        "headers": {"Authorization": "Bearer fixture"},
+        "body": {
+          "jsonrpc": "2.0",
+          "id": "mcp-1",
+          "method": "tools/call",
+          "params": {
+            "name": "discovery___search_tools",
+            "arguments": {"query": "cancel", "_auth_context": "untrusted-client-value"}
+          }
+        }
+      }
+    }
+  }
+}

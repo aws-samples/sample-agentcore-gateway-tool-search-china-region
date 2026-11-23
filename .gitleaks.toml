@@ -1,0 +1,31 @@
+title = "Reviewed non-credential build metadata"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Lambda Code.S3Key content-addressed ZIP names, audited in docs/security-scan-dispositions.md"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = [
+  '''(?:^|/)tests/fixtures/request-deployment-history/cn-north(?:west)?-1\.json$''',
+  '''(?:^|/)evidence/sem-ecs-production/dev-window-20261016T053211Z/(?:initial-template|capture-t0/live-evidence|candidate-final/manual-candidate|candidate-final/replacements)\.json$''',
+]
+regexes = ['''^\s*"S3Key":\s*"[a-f0-9]{64}\.zip"\s*,?\s*$''']
+
+[[allowlists]]
+description = "Historical source_sha256 entry, recomputed from the same Git blob"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''(?:^|/)investigation/readonly-validation\.json$''']
+regexes = ['''^\s*"readonly-access-check\.json":\s*"[a-f0-9]{64}"\s*,?\s*$''']
+
+[[allowlists]]
+description = "Historical source_hashes metadata; not an authentication secret (N001)"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''(?:^|/)investigation/correlation-output\.json$''']
+regexes = ['''^\s*"credential-refresh-state\.json":\s*"[a-f0-9]{64}"\s*,?\s*$''']

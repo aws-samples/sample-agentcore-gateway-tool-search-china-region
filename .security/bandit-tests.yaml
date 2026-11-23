@@ -1,0 +1,8 @@
+# Only tests; production infrastructure is scanned with runtime policy.
+# B101: assertions are the test oracle (CDK assertions run locally).
+# B105/B106: literal test passwords/secret identifiers authenticate only fake clients.
+# B108: expected /tmp mount paths and temporary fixture inputs, not shared temp files.
+# B311: deterministic fixture generation is not cryptographic.
+# B404/B603/B607: offline subprocess harnesses use repository programs and fixtures.
+# B102/B323 remain enabled; exact local exec/TLS exceptions have inline reasons.
+skips: [B101, B105, B106, B108, B311, B404, B603, B607]

@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:semantic-core:snapshot:v1",
+  "title": "Local index snapshot manifest, version 1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "descriptor_version", "storage", "gateway",
+    "catalog_revision", "build_id", "created_at", "tool_count", "vector_count",
+    "model_profile", "objects"
+  ],
+  "properties": {
+    "schema_version": {"const": 1, "type": "integer"},
+    "descriptor_version": {"const": 1, "type": "integer"},
+    "storage": {"const": "local"},
+    "gateway": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["account", "region", "gateway_id"],
+      "properties": {
+        "account": {"type": "string", "minLength": 1, "maxLength": 256},
+        "region": {"type": "string", "minLength": 1, "maxLength": 256},
+        "gateway_id": {"type": "string", "minLength": 1, "maxLength": 256}
+      }
+    },
+    "catalog_revision": {"type": "integer", "minimum": 1},
+    "build_id": {"type": "string", "minLength": 1, "maxLength": 256},
+    "created_at": {"type": "string", "minLength": 1, "maxLength": 64},
+    "tool_count": {"type": "integer", "minimum": 0, "maximum": 20000},
+    "vector_count": {"type": "integer", "minimum": 0, "maximum": 140000},
+    "model_profile": {
+      "anyOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["model_id", "revision", "dimension", "normalization", "config_version"],
+          "properties": {
+            "model_id": {"type": "string", "minLength": 1, "maxLength": 512},
+            "revision": {"type": "string", "minLength": 1, "maxLength": 512},
+            "dimension": {"type": "integer", "minimum": 1, "maximum": 4096},
+            "normalization": {"const": "l2"},
+            "config_version": {"type": "string", "minLength": 1, "maxLength": 512}
+          }
+        }
+      ]
+    },
+    "objects": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["catalog.json", "bm25.json"],
+      "properties": {
+        "catalog.json": {"$ref": "#/$defs/objectReference"},
+        "bm25.json": {"$ref": "#/$defs/objectReference"},
+        "vectors.npy": {"$ref": "#/$defs/objectReference"},
+        "parents.json": {"$ref": "#/$defs/objectReference"}
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"model_profile": {"type": "null"}}},
+      "then": {
+        "properties": {
+          "vector_count": {"const": 0},
+          "objects": {"maxProperties": 2}
+        }
+      },
+      "else": {
+        "properties": {
+          "objects": {"required": ["vectors.npy", "parents.json"]}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "objectReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bytes", "sha256"],
+      "properties": {
+        "bytes": {"type": "integer", "minimum": 1, "maximum": 1073741824},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    }
+  }
+}

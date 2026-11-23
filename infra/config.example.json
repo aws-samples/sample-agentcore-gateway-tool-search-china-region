@@ -1,0 +1,60 @@
+{
+  "account": "111122223333",
+  "region": "cn-northwest-1",
+  "stage": "dev",
+  "deployment_name": "gateway",
+  "gateway_id": "fixture-gateway",
+  "gateway_url": "https://gateway.example.invalid/mcp",
+  "gateway_allowed_hosts": ["gateway.example.invalid"],
+  "gateway_execution_role_name": "semsearch-existing-gateway",
+  "search_target_id": "fixture-search-target",
+  "search_incarnation": "v1",
+  "search_descriptor": {
+    "name": "discovery___search_tools",
+    "description": "Discover authorized tools",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "query": {"type": "string"},
+        "_auth_context": {"type": "string", "description": "Server-managed signed context. Clients must omit this field."}
+      },
+      "required": ["query"]
+    }
+  },
+  "registry": [
+    {"name": "discovery___search_tools", "target_id": "fixture-search-target", "incarnation": "v1", "role": "discovery"}
+  ],
+  "machine_principals": [["https://identity.example.invalid", "fixture-machine"]],
+  "oidc": {
+    "OIDC_ISSUER": "https://identity.example.invalid",
+    "OIDC_AUDIENCE": "fixture-audience",
+    "OIDC_DISCOVERY_URI": "https://identity.example.invalid/.well-known/openid-configuration",
+    "OIDC_JWKS_URI": "https://identity.example.invalid/jwks",
+    "OIDC_ALLOWED_HOSTS": "identity.example.invalid",
+    "OIDC_TOKEN_ENDPOINT": "https://identity.example.invalid/token",
+    "OIDC_MACHINE_SCOPES": "catalog.read"
+  },
+  "secrets": {
+    "model": {"suffix": "AbCd01"},
+    "signing": {"suffix": "AbCd02"},
+    "oauth": {"suffix": "AbCd03"}
+  },
+  "model_settings": {
+    "MODEL_ALLOWED_HOSTS": "model.example.invalid",
+    "MODEL_EMBEDDING_DIMENSIONS": "1024",
+    "MODEL_EMBEDDING_MAX_BATCH": "10",
+    "MODEL_RERANK_ENABLED": "false",
+    "MODEL_RERANK_PATH": "/rerank",
+    "MODEL_RERANK_ENVELOPE": "flat",
+    "MODEL_RERANK_SCORE_FIELD": "relevance_score"
+  },
+  "service_settings": {
+    "SEMSEARCH_FUSION_STRATEGY": "vector_bm25_fallback",
+    "SEMSEARCH_MCP_VERSIONS": "2025-03-26"
+  },
+  "models_enabled": false,
+  "schedules_enabled": false,
+  "request_package": "shared",
+  "request_provisioned_concurrency": 0,
+  "log_retention_days": 30
+}

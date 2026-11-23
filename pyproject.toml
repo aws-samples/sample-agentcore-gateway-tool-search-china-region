@@ -1,0 +1,71 @@
+[build-system]
+requires = ["setuptools==80.9.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gateway-semantic-core"
+version = "0.1.0"
+description = "Authorized hybrid retrieval core, Gateway Lambda services and offline evaluation"
+readme = "README.md"
+license = "MIT-0"
+license-files = ["LICENSE", "THIRD-PARTY-LICENSES", "build_inputs/jieba-0.42.1/LICENSE"]
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "boto3==1.43.111",
+    "botocore==1.43.111",
+    "PyJWT==2.15.1",
+    "cryptography==50.0.2",
+    "httpx==0.28.1",
+    "numpy==2.3.4",
+    "jieba==0.42.1",
+    "jsonschema==4.25.1",
+    # jieba uses pkg_resources without declaring setuptools in its metadata.
+    "setuptools==80.9.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "aws-cdk-lib==2.273.0",
+    "constructs==10.8.1",
+    "pytest==8.4.2",
+    "pytest-cov==7.0.0",
+    "ruff==0.14.0",
+    "mypy==1.18.2",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+semantic_core = ["py.typed", "schemas/*.json"]
+semantic_service = ["py.typed"]
+semantic_eval = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-ra --strict-markers"
+markers = [
+    "integration: real external integration; disabled unless explicitly enabled",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+mypy_path = "src"
+
+[[tool.mypy.overrides]]
+module = ["jieba", "jieba.*", "jsonschema", "jsonschema.*"]
+follow_untyped_imports = true
+
+[[tool.mypy.overrides]]
+module = ["boto3", "boto3.*", "botocore", "botocore.*"]
+ignore_missing_imports = true

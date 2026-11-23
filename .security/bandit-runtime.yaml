@@ -1,0 +1,5 @@
+# Only src/semantic_core, src/semantic_service and infra.
+# B101: internal type/config invariants; authorization uses explicit exceptions.
+# B311 remains enabled; only the two retry-jitter calls have inline exceptions.
+# B110 remains enabled; individual diagnostic/cleanup catches carry reviewed nosec.
+skips: [B101]
