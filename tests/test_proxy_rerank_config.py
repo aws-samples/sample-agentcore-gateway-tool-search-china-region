@@ -31,6 +31,8 @@ def test_proxy_qwen3_uses_only_the_configured_route_and_score_field(path, score_
         max_total_bytes=256,
     )
 
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def handler(request):
         requests.append(request)
         assert request.method == "POST"

@@ -101,6 +101,8 @@ def test_array_extension_wire_values_equal_configuration_readback(kind: Kind) ->
     config = settings(kind, extensions())
     requests: list[dict[str, object]] = []
 
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def handler(request: httpx.Request) -> httpx.Response:
         assert str(request.url) == f"https://{HOST}{config.path}"
         body = cast(dict[str, object], json.loads(request.content))
@@ -125,6 +127,8 @@ def test_original_array_mutation_cannot_change_saved_configuration_or_requests(k
     original["new_field"] = ["source mutation"]
     requests: list[dict[str, object]] = []
 
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def handler(request: httpx.Request) -> httpx.Response:
         body = cast(dict[str, object], json.loads(request.content))
         requests.append(body)
@@ -147,6 +151,8 @@ def test_nested_readback_mutation_cannot_change_configuration_or_future_requests
     config = settings(kind, expected)
     requests: list[dict[str, object]] = []
 
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def handler(request: httpx.Request) -> httpx.Response:
         body = cast(dict[str, object], json.loads(request.content))
         requests.append(body)

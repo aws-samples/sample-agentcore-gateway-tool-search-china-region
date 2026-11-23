@@ -37,6 +37,8 @@ def response(content: str, usage: object = _MISSING) -> dict[str, object]:
 def generate(responses: list[dict[str, object]], requests: list[httpx.Request]) -> GeneratedQueries:
     replies = iter(responses)
 
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def handler(request: httpx.Request) -> httpx.Response:
         assert str(request.url) == "https://usage.fixture.invalid/v1/chat/completions"
         requests.append(request)

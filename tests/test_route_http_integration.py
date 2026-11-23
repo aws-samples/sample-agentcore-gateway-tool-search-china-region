@@ -119,6 +119,8 @@ def test_real_tls_success_preserves_response_and_connection_reuse(backend_server
     ],
 )
 def test_http_exception_classification(error, expected):
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def fail(request):
         raise error
 
@@ -129,6 +131,8 @@ def test_http_exception_classification(error, expected):
 
 
 def test_certificate_error_never_falls_back():
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def fail(request):
         try:
             raise ssl.SSLCertVerificationError("untrusted")

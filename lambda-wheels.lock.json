@@ -6,7 +6,7 @@
   "source_date_epoch": 315532800,
   "build_backend": {
     "name": "setuptools",
-    "version": "80.9.0"
+    "version": "84.2.1"
   },
   "wheels": [
     {
@@ -39,10 +39,10 @@
     },
     {
       "name": "certifi",
-      "version": "2026.7.22",
-      "filename": "certifi-2026.7.22-py3-none-any.whl",
-      "url": "https://files.pythonhosted.org/packages/0b/a7/71ac2cff56fec219ed242bb11b8efb69fcc4bec75db06fb7bfe35de520e6/certifi-2026.7.22-py3-none-any.whl",
-      "sha256": "62f22742b58a1a33014a2b6b706588a8d7e2a88ae7bd1a6ebe8c992928483775"
+      "version": "2026.10.19",
+      "filename": "certifi-2026.10.19-py3-none-any.whl",
+      "url": "https://files.pythonhosted.org/packages/c4/51/29046e48f693c54e5b7412216d447a1d8362c9653148d98c02cdf65fa733/certifi-2026.10.19-py3-none-any.whl",
+      "sha256": "42d35340cc5b9ba78e818ddbff0c5b1c2b779de448a340fd1b989f5fa8670e1b"
     },
     {
       "name": "cffi",
@@ -90,7 +90,7 @@
       "name": "jieba",
       "version": "0.42.1",
       "filename": "jieba-0.42.1-py3-none-any.whl",
-      "sha256": "9dcc54016cbfbf4e8efc70426a513c0229a050779403f2c1586a78761287a246",
+      "sha256": "e15bebb554c4a29e8ae1b3b07520ff63c05ae834a3b9f2b563dcd3b5d6723f68",
       "source": {
         "filename": "jieba-0.42.1.tar.gz",
         "url": "https://files.pythonhosted.org/packages/c6/cb/18eeb235f833b726522d7ebed54f2278ce28ba9438e3135ab0278d9792a2/jieba-0.42.1.tar.gz",
@@ -169,10 +169,10 @@
     },
     {
       "name": "setuptools",
-      "version": "80.9.0",
-      "filename": "setuptools-80.9.0-py3-none-any.whl",
-      "url": "https://files.pythonhosted.org/packages/a3/dc/17031897dae0efacfea57dfd3a82fdd2a2aeb58e0ff71b77b87e44edc772/setuptools-80.9.0-py3-none-any.whl",
-      "sha256": "062d34222ad13e0cc312a4c02d73f059e86a4acbfbdea8f8f76b28c99f306922"
+      "version": "84.2.1",
+      "filename": "setuptools-84.2.1-py3-none-any.whl",
+      "url": "https://files.pythonhosted.org/packages/ef/55/6dc6d6bb953bdfc52519a0059592c52b6e3b8ad51cf8256dffceb55b0610/setuptools-84.2.1-py3-none-any.whl",
+      "sha256": "ca140b45d5325a9478f880e351484f62fef15f336462e449ca0c03c873d589c2"
     },
     {
       "name": "six",

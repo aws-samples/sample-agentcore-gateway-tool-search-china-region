@@ -12,20 +12,21 @@
 | Bandit 开发工具 | [bandit-development.yaml](../.security/bandit-development.yaml) | `scripts`、`reports`、`examples`、`src/semantic_eval`、`setup.py`；固定本地命令、非密码学采样；高风险调用另经 Semgrep 审计 |
 | Bandit 测试 | [bandit-tests.yaml](../.security/bandit-tests.yaml) | 只限 `tests`；合成口令、断言、临时目录和本地子进程；`exec` 和未验证 TLS 仍逐处审查 |
 | Checkov | `--framework dockerfile` | 扫描容器 Dockerfile 的全部内置规则，无规则豁免 |
-| Gitleaks | [.gitleaks.toml](../.gitleaks.toml) | 保留默认规则；仅 generic-api-key 的精确路径与字段形态同时满足时豁免，覆盖 Git 历史 |
+| Gitleaks | [.gitleaks.toml](../.gitleaks.toml) | 使用默认规则，无仓库自定义豁免，覆盖当前文件树与分支历史 |
 
 本地 Semgrep 回归的目录排除以仓库根锚定；`.gitignore` 中的 build、dist 同步锚定，
 嵌套产品目录不因名为 tests、build 或 dist 而排除。
-根 tests 目录由 Bandit 测试策略遍历，其中 B101、B105、B106、B108、B311、B404、
+根 tests 目录同时纳入 Semgrep 本地规则与 Bandit 测试策略，其中 Bandit 的 B101、B105、B106、B108、B311、B404、
 B603、B607 按测试用途跳过，不等于所有规则全覆盖。
 不得将这些测试豁免复制到产品代码。
+测试中的 mock transport 回调、布尔属性、固定代码字符串及本地子进程按具体规则逐行说明；
+只对已核对的命中使用带规则 ID 的 `nosemgrep`，不排除整个测试目录。
 `nosemgrep` 必须注明规则 ID，`nosec` 必须注明 B 编号，理由放在相邻注释或本表。
 新增任何豁免都应确认输入来源及认证/网络边界，不能仅以“零告警”为依据。
 
 ## 精确豁免与 Git 历史
 
-保留现有 `.gitleaks.toml`、`.gitleaksignore` 和扫描策略。历史 fingerprint 只对应特定
-提交、文件、行与规则，不是整个文件或未来提交的豁免。
+`.gitleaks.toml` 只启用默认规则；仓库不包含历史 fingerprint 豁免。
 新增例外必须审查输入来源，以指定规则 ID 的行内注释说明理由；不要扩大路径排除来隐藏发现。
 
 Gitleaks 使用 `--log-opts=HEAD` 限定当前分支历史，避免扫描共享仓库的其他分支。
@@ -95,8 +96,6 @@ security_scan .artifacts/scanner-venv/bin/python -m unittest discover -s .securi
 平台完整规则的 ID 即使带前缀，也能识别现有短 ID 的行内 `nosemgrep`。
 本地目录排除也不应扩大平台已有的扫描排除范围；Bandit 分组只说明本地例外，平台继续执行其完整策略。
 本地扫描不代替发布批准。
-Gitleaks 路径规则兼容 `git .`、`dir .` 与 `dir <绝对路径>`；目录边界使用 `(?:^|/)`，
-完整文件名、行形态和 generic-api-key 规则限制仍须同时满足。
 不要归档原始秘密扫描输出；归档文件只保留位置、规则、提交和脱敏形态。
 
 ## 上游依据

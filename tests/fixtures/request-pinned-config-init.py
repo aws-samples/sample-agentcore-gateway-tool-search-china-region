@@ -26,7 +26,11 @@ def load(*args):
 
 
 runtime.load_configuration = load
+# This is a valid lambda callback, not a module-level return statement.
+# nosemgrep: return-not-in-function
 runtime._aws = lambda service: object()
+# This is a valid lambda callback, not a module-level return statement.
+# nosemgrep: return-not-in-function
 runtime._http = lambda: object()
 try:
     importlib.import_module("semantic_service.request_runtime")

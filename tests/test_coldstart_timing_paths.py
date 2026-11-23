@@ -159,6 +159,8 @@ def test_oidc_discovery_and_jwks_timers_follow_actual_fetches_and_cache_reuse():
     jwk.update(kid="offline-key", alg="RS256", use="sig")
     calls = []
 
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def transport(request):
         calls.append(str(request.url))
         if str(request.url) == config.discovery_uri:

@@ -1,4 +1,4 @@
-"""Regression cases from the independent production readiness reviews."""
+"""Regressions for ECS security boundaries and deployment readiness."""
 
 from dataclasses import replace
 from pathlib import Path

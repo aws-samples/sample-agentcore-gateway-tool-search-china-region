@@ -264,6 +264,8 @@ def secret(version):
 def test_auth_rotation_has_separate_attempts_and_keeps_original_deadline(clock, refresh_fails):
     seen_timeouts = []
 
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def respond(request):
         seen_timeouts.append(request.extensions["timeout"]["read"])
         if len(seen_timeouts) == 1:
@@ -393,6 +395,8 @@ def test_failed_diagnostic_clock_preserves_success_or_original_provider_error(
 
 
 def test_no_embedding_scope_does_not_install_a_trace_callback(clock):
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def respond(request):
         assert "trace" not in request.extensions
         return httpx.Response(200, content=BODY)
@@ -408,6 +412,8 @@ def test_parallel_collectors_and_nested_scope_do_not_share_attempts():
     barrier = Barrier(2)
 
     def one_request(status):
+        # Callback is passed to the local mock transport below; it is not unused.
+        # nosemgrep: useless-inner-function
         def respond(request):
             barrier.wait(timeout=5)
             return httpx.Response(status, content=BODY)

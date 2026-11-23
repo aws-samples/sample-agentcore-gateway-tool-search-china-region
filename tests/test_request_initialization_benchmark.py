@@ -34,6 +34,8 @@ def child(
         "BOTO_CONFIG": os.devnull,
         **(extra_environment or {}),
     }
+    # Fixed local test program and fixture paths; argv is not request-controlled.
+    # nosemgrep: dangerous-subprocess-use-audit
     result = subprocess.run(  # nosec B603
         [sys.executable, str(SCRIPT), "--child"],
         input=json.dumps({"variant": variant, "mode": mode}),
@@ -368,6 +370,8 @@ def probe():
 benchmark["_child"].__globals__["_configuration"] = probe
 benchmark["_child"]("on-demand", "normal_import")
 """
+    # Fixed local test program and fixture paths; argv is not request-controlled.
+    # nosemgrep: dangerous-subprocess-use-audit
     result = subprocess.run(  # nosec B603
         [sys.executable, "-c", script],
         cwd=ROOT,
@@ -391,6 +395,8 @@ assert httpx.HTTPTransport.handle_request.__name__ == "handle_request"
 from semantic_service import _request_prefetch
 assert _request_prefetch.prefetch.__module__ == "semantic_service._request_prefetch"
 """
+    # Fixed local test program and fixture paths; argv is not request-controlled.
+    # nosemgrep: dangerous-subprocess-use-audit
     result = subprocess.run(  # nosec B603
         [sys.executable, "-c", script],
         cwd=ROOT,
@@ -416,6 +422,8 @@ assert row["oidc_attempts"][0]["outcome"] == "ok"
 assert row["metadata_process_ids"] == [os.getpid()]
 print(json.dumps(row))
 """
+    # Fixed local test program and fixture paths; argv is not request-controlled.
+    # nosemgrep: dangerous-subprocess-use-audit
     result = subprocess.run(  # nosec B603
         [sys.executable, "-c", script],
         cwd=ROOT,
@@ -445,6 +453,8 @@ def validate_snapshot(row, **kwargs):
 benchmark["_child"].__globals__["_validate_measurement"] = validate_snapshot
 benchmark["_child"]("on-demand", "normal_import")
 """
+    # Fixed local test program and fixture paths; argv is not request-controlled.
+    # nosemgrep: dangerous-subprocess-use-audit
     result = subprocess.run(  # nosec B603
         [sys.executable, "-c", script],
         cwd=ROOT,
@@ -467,6 +477,8 @@ def test_default_run_alternates_twenty_pairs_in_each_compilation_mode(
         assert kwargs["env"] == benchmark._offline_environment()
         payload = json.loads(kwargs["input"])
         calls.append((payload["variant"], payload["mode"]))
+        # CompletedProcess only constructs a mock result; it starts no process.
+        # nosemgrep: dangerous-subprocess-use-audit
         return subprocess.CompletedProcess(
             command, 0, json.dumps(valid_row(payload["variant"], payload["mode"])), ""
         )

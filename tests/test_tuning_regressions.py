@@ -55,9 +55,13 @@ def test_expired_credentials_are_distinct_safe_and_never_retried(
     def run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
         calls.append(command)
         if phase == "secret" and len(calls) == 1:
+            # CompletedProcess only constructs a mock result; it starts no process.
+            # nosemgrep: dangerous-subprocess-use-audit
             return subprocess.CompletedProcess(
                 command, 0, json.dumps({"Account": "a", "Arn": "b", "UserId": "c"}), ""
             )
+        # CompletedProcess only constructs a mock result; it starts no process.
+        # nosemgrep: dangerous-subprocess-use-audit
         return subprocess.CompletedProcess(
             command, 255, "private secret", "An error occurred (ExpiredToken): private key"
         )
@@ -116,6 +120,8 @@ def test_chat_generation_failure_keeps_usage_from_all_received_attempts(
 ) -> None:
     requests: list[httpx.Request] = []
 
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def handler(request: httpx.Request) -> httpx.Response:
         requests.append(request)
         if len(requests) == 2 and second_failure == "http":

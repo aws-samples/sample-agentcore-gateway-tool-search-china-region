@@ -1,4 +1,4 @@
-"""Network, cost and deployment dependency cases from the resilience review."""
+"""Regressions for network isolation, resource costs and deployment dependencies."""
 
 from dataclasses import replace
 

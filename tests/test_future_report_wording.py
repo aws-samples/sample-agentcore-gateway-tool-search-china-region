@@ -127,13 +127,13 @@ def test_rendered_dev_describes_its_own_grid_and_provenance(
     text = (tmp_path / "dev-report.md").read_text()
     if future:
         assert "The historical cosine grid has 0.1 spacing" not in text
-        assert "75 test texts had been observed" not in text
+        assert "Split provenance is incomplete" not in text
         assert "0.05" in text
         assert "not authenticated" in text
     else:
         assert "The historical cosine grid has 0.1 spacing" in text
-        assert "75 test texts had been observed" in text
-        assert "internal claim hashes do not establish chronology" in text
+        assert "Split provenance is incomplete" in text
+        assert "prior exposure to test queries cannot be ruled out" in text
 
 
 @pytest.mark.parametrize("future", [False, True])
@@ -155,7 +155,7 @@ def test_rendered_test_describes_the_recorded_control_arm(
         assert "No ungated-vector arm was recorded" in text
     if future:
         assert "offline correction of the one completed test report" not in text
-        assert "75 test texts had been observed" not in text
+        assert "Split provenance is incomplete" not in text
         assert "Its historical vector + 0.6 results" not in text
         assert "not authenticated" in text
     else:

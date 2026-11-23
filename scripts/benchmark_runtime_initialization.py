@@ -204,7 +204,7 @@ def _summary(values: list[float]) -> dict[str, float]:
 
 
 def _validate_measurement(row: dict[str, object], *, variant: str, mode: str, pair: int) -> None:
-    """逐样本验证本次去除高层 SDK 导入的实验前提，不对速度设阈值。"""
+    """逐样本验证高层 SDK 导入的实验前提，不对速度设阈值。"""
     context = f"benchmark precondition failed ({mode}, {variant}, pair {pair})"
     if row.get("mode") != mode:
         raise RuntimeError(f"{context}: unexpected measurement mode")

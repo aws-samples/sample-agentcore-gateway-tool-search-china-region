@@ -86,6 +86,8 @@ def running_server(loopback_only, tmp_path):
 
 def connection(server):
     return closing(
+        # TLS exception is restricted to the ephemeral loopback fixture server.
+        # nosemgrep: httpsconnection-detected
         http.client.HTTPSConnection(
             "127.0.0.1",
             server.server_port,
@@ -312,6 +314,8 @@ def test_startup_keeps_search_and_health_on_all_task_interfaces(monkeypatch):
     with pytest.raises(RuntimeError, match="captured listeners"):
         ecs_server.main()
     assert addresses["search"][0] == addresses["health"][0]
+    # is_unspecified is an ipaddress boolean property, not a method.
+    # nosemgrep: is-function-without-parentheses
     assert ipaddress.ip_address(addresses["search"][0]).is_unspecified
     assert addresses["search"][1] == 8443
     assert addresses["health"][1] == 9443

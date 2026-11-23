@@ -1,4 +1,4 @@
-"""Review regressions for truthful telemetry and model-failure degradation."""
+"""Regressions for truthful telemetry and model-failure degradation."""
 
 import json
 from dataclasses import replace

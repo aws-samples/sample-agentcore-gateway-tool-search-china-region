@@ -82,9 +82,13 @@ def test_synthesized_request_handler_prepares_the_selected_module(monkeypatch, c
     monkeypatch.setattr(runtime, "_request", lambda: calls.append("factory"))
     monkeypatch.delitem(sys.modules, module_name, raising=False)
     package_name, _, member_name = module_name.rpartition(".")
+    # Module names come only from Handler values in the locally synthesized template.
+    # nosemgrep: non-literal-import
     package = importlib.import_module(package_name)
     monkeypatch.setattr(package, member_name, None, raising=False)
     try:
+        # Module names come only from Handler values in the locally synthesized template.
+        # nosemgrep: non-literal-import
         entry = importlib.import_module(module_name)
         assert callable(getattr(entry, function_name))
         assert calls == ["factory"] and runtime._FIRST_INVOCATION is True

@@ -135,7 +135,7 @@ Synth 是把 CDK 程序转换为 CloudFormation 模板的本地步骤，不会�
 `pyproject.toml` 固定直接依赖，`requirements.lock` 固定完整传递依赖及分发物 SHA-256；Windows 专属依赖保留环境 marker。
 uv 是外部 CLI，不在 Python 锁文件内；复现前记录实际路径和版本。
 `requirements-build.lock` 只包含同版本、同 hash 的 setuptools，先安装它是为了在当前 `.venv` 内构建 jieba 的源分发物，避免额外隔离环境下载未锁定依赖。
-jieba 0.42.1 使用 `pkg_resources`，因此运行时也显式固定 setuptools 80.9.0。
+jieba 0.42.1 在没有 `pkg_resources` 时从已安装目录读取资源；setuptools 固定为 84.2.1，并与构建后端及 Lambda 锁保持一致。
 CDK CLI 固定在 [package-lock.json](../package-lock.json)，npm 校验 SHA-512 integrity。
 安装命令为用户与全局 npm 配置使用两个不同的空文件路径，避免重复加载同一个 `/dev/null`。
 后续使用 `node_modules/.bin/cdk`，不使用未锁定的 `npx latest`。

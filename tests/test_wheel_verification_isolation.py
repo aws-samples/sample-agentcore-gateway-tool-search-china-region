@@ -113,6 +113,8 @@ def probe():
 verifier.verify = probe
 verifier.verify_isolated()
 """
+    # Fixed local test program and fixture paths; argv is not request-controlled.
+    # nosemgrep: dangerous-subprocess-use-audit
     return subprocess.run(  # nosec B603
         [sys.executable, "-I", "-c", script, str(ROOT / "scripts/verify_wheel.py"), str(wheel)],
         text=True,
@@ -130,9 +132,13 @@ def test_actual_eager_entry_imports_from_wheel_with_only_its_factory_replaced(tm
 @pytest.mark.parametrize(
     "entry",
     [
+        # Adjacent literals intentionally form one code snippet or ARN value.
+        # nosemgrep: string-concat-in-list
         "from semantic_service import facade\n"
         "def handler(event, context):\n"
         "    return facade._router()\n",
+        # Adjacent literals intentionally form one code snippet or ARN value.
+        # nosemgrep: string-concat-in-list
         "from semantic_service import facade\n"
         "_ROUTER = facade._router()\n"
         "_SECOND = facade._router()\n",

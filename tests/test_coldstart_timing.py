@@ -370,6 +370,8 @@ runtime.request_handler({}, object())
             "AWS_EC2_METADATA_DISABLED",
         }:
             env.pop(name)
+    # Fixed local test program and fixture paths; argv is not request-controlled.
+    # nosemgrep: dangerous-subprocess-use-audit
     result = subprocess.run(  # nosec B603
         [sys.executable, "-c", code], env=env, capture_output=True, text=True, timeout=15
     )

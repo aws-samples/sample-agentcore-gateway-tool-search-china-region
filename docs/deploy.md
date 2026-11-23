@@ -14,7 +14,8 @@
 Python 3.12 x86_64 Lambda 及 `live` aliases、独立运行角色、版本化 S3 bucket、
 两张物理DynamoDB表、两个Scheduler schedule、日志、指标过滤器及告警。每个角色的非秘密
 配置另外生成不可变S3对象，以精确VersionId/字节数/SHA-256引用。S3、两张table、
-日志组和已发布 Lambda versions保留；默认 ECS 关闭时不创建 secret 值、IdP、VPC/NAT、Function URL、
+日志组保留；已发布 Lambda versions 在函数存续期间保留，删除整个函数会删除全部版本及 alias。
+默认 ECS 关闭时不创建 secret 值、IdP、VPC/NAT、Function URL、
 X-Ray、CloudTrail 事件链、SQS 或 DLQ。
 显式启用可选 `ecs_search` 后增加 facade/fallback、ECS、internal NLB、私有子网、
 NAT 和 S3/DynamoDB gateway endpoint 等资源，详见[ECS 运维](ecs-search-operations.md)。
@@ -55,7 +56,7 @@ REQUEST 独立包，并仅在 REQUEST `live` alias 上生成
 [`AWS::BedrockAgentCore::Gateway`](https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-resource-bedrockagentcore-gateway.html)
 和
 [`AWS::BedrockAgentCore::GatewayTarget`](https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-resource-bedrockagentcore-gatewaytarget.html)；
-本次没有查询任一区域 CloudFormation registry。确认支持及现有资源所有权后，才能另行
+部署前须查询目标区域 CloudFormation registry。确认支持及现有资源所有权后，才能另行
 决定是否增加可选创建路径；不能用未验证的自定义资源或猜测资源类型补齐。
 
 资源名使用 `semsearch-` 前缀并包含 stage、部署标识；资源支持标签时统一
@@ -66,7 +67,7 @@ Gateway identity是长期身份，变更可能替换资源，必须先检查 cha
 ## 前置条件
 
 1. 部署任务具有单独的账号、区域、凭证和资源变更授权。部署身份与运行身份、授权
-   管理员、工具发布者分离；部署任务自行验证会话身份，不从本次本地结果推定账号。
+   管理员、工具发布者分离；部署任务自行验证会话身份，不从本地合成结果推定账号。
 2. 为目标区域填写并批准[配额工作表](quotas.md)。确认业务与 Indexer 共享的 Gateway 额度、
    Lambda 并发、DynamoDB 热键、Scheduler、IdP/provider 限额、预算和告警接收负责人。
    不用实际 throttling结果替代内存检索容量实验。
@@ -96,12 +97,12 @@ Gateway identity是长期身份，变更可能替换资源，必须先检查 cha
    Search event/context、分页和错误包装的生产配置验证后才能开放多权限流量。
    离线 fixture 与 CDK synth 成功均不代替
    CUSTOM_JWT/header、精确alias及生产签名字符串的完整往返门槛。
-8. 后续部署本系列预算改动前，按既有部署 Search 和 Enhancer 的配置引用读取各自的
+8. 部署前，按既有部署 Search 和 Enhancer 的配置引用读取各自的
    固定版本 S3 配置，核对 `MODEL_EMBEDDING_TIMEOUT_SECONDS` 是 `(0, 6]` 内的
    有限秒数，并核对 Search 的 `SEMSEARCH_SEARCH_TIMEOUT_SECONDS` 为 `(0.3, 6]`
-   内有限秒数。新代码默认分别为 `1.0` 和 `3.0` 秒。若现值超界或无效，先核实单位并改为正确秒数，
+   内有限秒数。代码默认分别为 `1.0` 和 `3.0` 秒。若现值超界或无效，先核实单位并改为正确秒数，
    发布并引用新的不可变配置版本，再部署代码。仅检查本地配置示例或 S3 当前版本
-   不能完成这项核对。本次本地修订未读取或修改既有部署配置。
+   不能完成这项核对。
 
 当前源码默认与各函数已部署配置须分别核对；固定 S3 配置可以覆盖代码默认值。
 
@@ -138,11 +139,11 @@ wheel集合。开发机的native wheel不可直接打包。Python依赖仅安装
 REQUEST 输出是 `.artifacts/request.zip` 与 `.artifacts/request.manifest.json`。
 两个 manifest 分别记录 operation、实际选择的 wheel、目标平台、包大小和 ZIP
 摘要；REQUEST 还记录已裁依赖与闭包来源，不能只凭完整锁摘要推断发布内容。
-本次 Search 预算与诊断改动保持 REQUEST 专包的模块集合不变，但包内的
+REQUEST 专包的模块集合固定，但包内的
 [config.py](../src/semantic_service/config.py)、
 [deployment_config.py](../src/semantic_service/deployment_config.py)、
-[runtime.py](../src/semantic_service/runtime.py) 等共享源码内容改变，
-ZIP 摘要也会改变。REQUEST 运行时不调用 `parse_search_config`，不执行新增的
+[runtime.py](../src/semantic_service/runtime.py) 等共享源码内容改变时，
+ZIP 摘要也会改变。REQUEST 运行时不调用 `parse_search_config`，不执行
 Search 预算与模型计时路径；这不等于专包字节不变。比较源码清单、内容摘要及当前
 manifest，不能要求与旧部署的 ZIP 摘要相同。
 REQUEST 构建不能覆盖共享 `lambda.zip`。首次只下载锁定的PyPI分发物；后续`--offline`
@@ -761,9 +762,10 @@ IdP正常key overlap至少覆盖已签token寿命和缓存传播预算，具体�
 catalog重建并正常发布；不使用历史ACL、安全目录或已删除tool恢复内容。不要手写
 无条件DynamoDB更新、复制旧CONTROL/PROTECTED、恢复旧policy epoch，或清除永久tombstone。
 
-S3 bucket、state/protected两表、日志与已发布Lambda versions均使用RETAIN；两表分别
-启用deletion protection/PITR，protected无TTL，S3无自动时间删除规则。删除stack不会
-删除保留数据，后续重建可能需要显式资源导入及IAM重连，不能盲目同名重建。
+S3 bucket、state/protected两表、可选 ECS 重放表及日志组（含可选 VPC Flow Logs）使用RETAIN；
+各表启用deletion protection/PITR，protected无TTL，S3无自动时间删除规则。已发布Lambda versions
+在函数存续期间保留，但删除整个函数会删除全部版本及 alias，Version 的保留策略不能保住它们。
+删除stack不会删除全部保留数据，后续重建可能需要显式资源导入及IAM重连，不能盲目同名重建。
 
 两表PITR独立，选相同时间点也不证明得到同一个事务视图；备份恢复先落到隔离表，
 不能将任一历史表直接切为在线权威。内容恢复保持当前protected表绑定，并用当前

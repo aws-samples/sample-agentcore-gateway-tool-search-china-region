@@ -5,6 +5,7 @@
 公开样例名称：`sample-agentcore-gateway-tool-search`。示例采用通用制造业场景，不包含业务系统的真实数据或部署记录。
 
 本项目为中国区 AgentCore Gateway 提供工具语义搜索。
+本样例仅支持部署到 AWS 中国（北京）`cn-north-1` 和中国（宁夏）`cn-northwest-1` 区域，部署定义使用 `arn:aws-cn`。
 它帮助 Agent 先找到相关且已授权的工具，再调用业务工具。
 仓库包含 REQUEST 拦截器、Search、Indexer、Enhancer 和 CDK 部署定义。
 

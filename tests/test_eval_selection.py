@@ -37,6 +37,8 @@ def test_direct_provider_preset_rejects_proxy_prefix_before_network() -> None:
     config = replace(bailian_chat_config(), json_mode=False)
     assert config.origin_only is True
 
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def unexpected_request(request: httpx.Request) -> httpx.Response:
         pytest.fail("invalid provider configuration must fail before HTTP")
 
@@ -51,6 +53,8 @@ def test_selector_preserves_valid_direct_origin_and_generic_proxy(direct: bool) 
     transport = replace(TRANSPORT, base_url="https://offline.example") if direct else TRANSPORT
     expected_url = transport.base_url + config.path
 
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def handler(request: httpx.Request) -> httpx.Response:
         assert str(request.url) == expected_url
         return httpx.Response(200, json={**response(), "model": config.profile.model_id})
@@ -130,6 +134,8 @@ def select(payload: dict[str, object]) -> object:
 def test_native_tools_prefix_schema_auth_and_request_budget() -> None:
     candidate = tool()
 
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def handler(request: httpx.Request) -> httpx.Response:
         assert str(request.url) == "https://offline.example/tenant/v1/chat/completions"
         assert request.headers["x-api-key"] == "test-credential"
@@ -255,6 +261,8 @@ def test_invalid_response_is_a_safe_error(payload: dict[str, object]) -> None:
 
 @pytest.mark.parametrize("status", [401, 429, 500])
 def test_http_error_does_not_expose_credentials_or_response_body(status: int) -> None:
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def handler(_: httpx.Request) -> httpx.Response:
         return httpx.Response(status, json={"error": "test-credential private body"})
 
@@ -269,6 +277,8 @@ def test_http_error_does_not_expose_credentials_or_response_body(status: int) ->
 
 
 def test_timeout_is_bounded_and_safe() -> None:
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def handler(request: httpx.Request) -> httpx.Response:
         raise httpx.ReadTimeout("test-credential private body", request=request)
 
@@ -280,6 +290,8 @@ def test_timeout_is_bounded_and_safe() -> None:
 
 
 def test_empty_candidates_and_invalid_inputs_do_not_make_requests() -> None:
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def handler(_: httpx.Request) -> httpx.Response:
         pytest.fail("no HTTP request expected")
 

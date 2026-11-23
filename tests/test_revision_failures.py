@@ -1,4 +1,4 @@
-"""Offline regression coverage for review findings M-2 and L-1/L-3/L-4."""
+"""Offline regressions for index integrity, credentials and authorization boundaries."""
 
 from __future__ import annotations
 
@@ -73,6 +73,8 @@ def test_rerank_all_response_failures_keep_usage_and_stop_at_budget(
     }
     attempts = []
 
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def respond(request: httpx.Request) -> httpx.Response:
         attempts.append(request)
         return httpx.Response(200, json=payload)
@@ -122,9 +124,13 @@ def test_expired_variants_stop_at_each_credential_stage_without_exposing_output(
         calls.append(command)
         assert "--region" in command and "cn-north-1" in command
         if phase == "secret" and len(calls) == 1:
+            # CompletedProcess only constructs a mock result; it starts no process.
+            # nosemgrep: dangerous-subprocess-use-audit
             return subprocess.CompletedProcess(
                 command, 0, json.dumps({"Account": "a", "Arn": "b", "UserId": "c"}), ""
             )
+        # CompletedProcess only constructs a mock result; it starts no process.
+        # nosemgrep: dangerous-subprocess-use-audit
         return subprocess.CompletedProcess(
             command, 255, "private fixture stdout", f"An error occurred ({code}): private stderr"
         )

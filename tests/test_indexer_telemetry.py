@@ -25,6 +25,8 @@ FIELDS = (
 )
 CONTEXT = SimpleNamespace(
     aws_request_id="00000000-0000-0000-0000-000000000001",
+    # This is a valid lambda callback, not a module-level return statement.
+    # nosemgrep: return-not-in-function
     get_remaining_time_in_millis=lambda: 45_500,
 )
 

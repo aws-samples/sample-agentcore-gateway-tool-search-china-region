@@ -66,6 +66,8 @@ def run_child(body: str) -> None:
         "AWS_CONFIG_FILE": os.devnull,
         "AWS_SHARED_CREDENTIALS_FILE": os.devnull,
     }
+    # Fixed local test program and fixture paths; argv is not request-controlled.
+    # nosemgrep: dangerous-subprocess-use-audit
     result = subprocess.run(  # nosec B603
         [
             sys.executable,

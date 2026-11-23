@@ -21,6 +21,8 @@ def test_late_http_result_is_rejected_and_response_closed(monkeypatch):
     monkeypatch.setattr("semantic_core._http.time.monotonic", lambda: clock[0])
     response = httpx.Response(200, json={})
 
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def handler(request):
         clock[0] += 0.46
         return response
@@ -34,6 +36,8 @@ def test_late_http_result_is_rejected_and_response_closed(monkeypatch):
         with pytest.raises(ProviderError) as error:
             provider._post("/embeddings", {}, RequestContext("late", 101.0))
     assert error.value.code is ErrorCode.TIMEOUT
+    # is_closed is a boolean property; calling it would be incorrect.
+    # nosemgrep: is-function-without-parentheses
     assert response.is_closed
 
 
@@ -41,6 +45,8 @@ def test_configured_https_prefix_and_port_are_usable():
     config = HTTPConfig("https://model.example:8443/tenant/v1", ("model.example",))
     urls = []
 
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def handler(request):
         urls.append(str(request.url))
         return httpx.Response(200, json={})
@@ -96,6 +102,8 @@ def test_generic_resource_limits_are_not_bound_to_legacy_bailian_ceilings():
 def test_explicit_auth_name_and_format_override_client_auth(name, template, expected):
     requests = []
 
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def handler(request):
         requests.append(request)
         return httpx.Response(200, json={})
@@ -128,6 +136,8 @@ def test_explicit_auth_name_and_format_override_client_auth(name, template, expe
 def test_no_explicit_auth_preserves_injected_client_headers():
     requests = []
 
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def handler(request):
         requests.append(request)
         return httpx.Response(200, json={})
@@ -147,6 +157,8 @@ def test_no_explicit_auth_preserves_injected_client_headers():
 def test_redirect_cannot_forward_explicit_credentials():
     requests = []
 
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def handler(request):
         requests.append(request)
         return httpx.Response(307, headers={"Location": "https://other.example/stolen"})
@@ -289,6 +301,8 @@ def test_frozen_nested_request_extensions_are_encoded_as_json():
     frozen = freeze_body(source, set())
     source["vendor"]["flags"].append(2)
 
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def handler(request):
         requests.append(request)
         return httpx.Response(200, json={})

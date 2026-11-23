@@ -541,6 +541,8 @@ def assert_secret_permissions(template, config, *, models_enabled):
         "enhancer": {"model"} if models_enabled else set(),
     }
     arns = {
+        # Adjacent literals intentionally form one code snippet or ARN value.
+        # nosemgrep: string-concat-in-list
         kind: (
             f"arn:aws-cn:secretsmanager:{config.region}:{config.account}:"
             f"secret:{reference.name}-{reference.suffix}"

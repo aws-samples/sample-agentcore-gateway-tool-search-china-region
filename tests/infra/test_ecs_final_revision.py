@@ -1,4 +1,4 @@
-"""Regression cases from the final independent ECS production review."""
+"""Regressions for ECS diagnostics, network isolation and immutable assets."""
 
 import json
 from dataclasses import replace

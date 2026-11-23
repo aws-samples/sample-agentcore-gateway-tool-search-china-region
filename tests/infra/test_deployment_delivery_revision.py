@@ -1,4 +1,4 @@
-"""Offline deployment guard regressions from the second independent review."""
+"""Offline deployment guards for asset identity, target binding and delivery state."""
 
 import json
 import subprocess  # nosec B404
@@ -153,8 +153,12 @@ def test_cli_output_overlay_requires_independent_output_allow_list(tmp_path):
         "--output",
         str(output),
     ]
+    # Fixed local test program and fixture paths; argv is not request-controlled.
+    # nosemgrep: dangerous-subprocess-use-audit
     denied = subprocess.run(command, capture_output=True, text=True)  # nosec B603
     assert denied.returncode == 2 and not output.exists()
+    # Fixed local test program and fixture paths; argv is not request-controlled.
+    # nosemgrep: dangerous-subprocess-use-audit
     allowed = subprocess.run(  # nosec B603
         [*command, "--allow-output", "SearchEcsEndpoint"], capture_output=True, text=True
     )
@@ -184,6 +188,8 @@ def test_predeploy_cli_has_distinct_nonready_exit_status(tmp_path):
     capture_path = tmp_path / "capture.json"
     capture_path.write_text(json.dumps(capture))
     output = tmp_path / "plan.json"
+    # Fixed local test program and fixture paths; argv is not request-controlled.
+    # nosemgrep: dangerous-subprocess-use-audit
     result = subprocess.run(  # nosec B603
         [
             sys.executable,

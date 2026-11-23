@@ -55,6 +55,8 @@ def context() -> RequestContext:
 
 
 def test_portable_embedding_route_model_and_dimensions() -> None:
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def handler(request: httpx.Request) -> httpx.Response:
         assert str(request.url) == "https://offline.example/v1/embeddings"
         assert json.loads(request.content) == {
@@ -75,6 +77,8 @@ def test_portable_embedding_route_model_and_dimensions() -> None:
 
 
 def test_portable_chat_route_and_vendor_neutral_body() -> None:
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def handler(request: httpx.Request) -> httpx.Response:
         assert str(request.url) == "https://offline.example/v1/chat/completions"
         payload = json.loads(request.content)
@@ -94,6 +98,8 @@ def test_portable_chat_route_and_vendor_neutral_body() -> None:
 def test_embedding_fields_can_be_omitted_and_config_allows_more_than_ten_inputs() -> None:
     texts = ["query"] * 12
 
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def handler(request: httpx.Request) -> httpx.Response:
         assert json.loads(request.content) == {
             "model": EMBEDDING_PROFILE.model_id,
@@ -125,6 +131,8 @@ def test_embedding_fields_can_be_omitted_and_config_allows_more_than_ten_inputs(
 
 
 def test_base_prefix_port_and_explicit_auth_are_forwarded_to_shared_transport() -> None:
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def handler(request: httpx.Request) -> httpx.Response:
         assert str(request.url) == "https://offline.example:8443/tenant/v1/embeddings"
         assert request.headers["x-api-key"] == "fixture-credential"
@@ -163,6 +171,8 @@ def test_generic_model_identity_ignores_nonstandard_echo_fields() -> None:
 
 @pytest.mark.parametrize("purpose", ["query", "document"])
 def test_embedding_request_limits_are_configured_and_checked_before_io(purpose: str) -> None:
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def never(_: httpx.Request) -> httpx.Response:
         pytest.fail("invalid input must not reach transport")
 
@@ -198,6 +208,8 @@ def test_configured_embedding_shape_does_not_relax_response_validation(data: obj
 
 
 def test_chat_optional_json_mode_and_vendor_extra_body() -> None:
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def handler(request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content)
         assert str(request.url) == "https://offline.example/custom/chat"
@@ -230,6 +242,8 @@ def test_chat_schema_repair_is_bounded_and_never_echoes_invalid_reply() -> None:
         [chat_response({"queries": ["q"], "extra": "invalid-output-marker"}), chat_response()]
     )
 
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def handler(request: httpx.Request) -> httpx.Response:
         requests.append(request)
         return httpx.Response(200, json=next(replies))
@@ -256,6 +270,8 @@ def test_chat_does_not_retry_identity_or_usage_but_limits_schema_to_two_calls(fa
     if failure == "usage":
         payload["usage"] = {"total_tokens": -1}
 
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def handler(request: httpx.Request) -> httpx.Response:
         requests.append(request)
         return httpx.Response(200, json=payload)

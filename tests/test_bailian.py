@@ -52,6 +52,8 @@ def embedding_payload() -> dict[str, object]:
 def test_embedding_request_shape_input_order_and_normalization() -> None:
     requests: list[httpx.Request] = []
 
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def handler(request: httpx.Request) -> httpx.Response:
         requests.append(request)
         return httpx.Response(200, json=embedding_payload())
@@ -111,6 +113,8 @@ def test_embedding_malformed_output_is_rejected(mutation: Callable) -> None:
 def test_http_errors_are_safe_and_do_not_retry(status: int, expected: ErrorCode) -> None:
     requests: list[httpx.Request] = []
 
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def handler(request: httpx.Request) -> httpx.Response:
         requests.append(request)
         return httpx.Response(
@@ -129,6 +133,8 @@ def test_http_errors_are_safe_and_do_not_retry(status: int, expected: ErrorCode)
 
 @pytest.mark.parametrize("failure", [httpx.ReadTimeout, httpx.ConnectError])
 def test_transport_errors_are_classified(failure: type[httpx.RequestError]) -> None:
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def handler(request: httpx.Request) -> httpx.Response:
         raise failure("private body", request=request)
 
@@ -144,6 +150,8 @@ def test_transport_errors_are_classified(failure: type[httpx.RequestError]) -> N
 
 
 def test_expired_deadline_and_embedding_budget_do_not_send_requests() -> None:
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def never(request: httpx.Request) -> httpx.Response:
         pytest.fail(f"unexpected request to {request.url.host}")
 
@@ -294,6 +302,8 @@ def test_rerank_native_and_flat_shapes(model: str) -> None:
         {"index": 0, "relevance_score": 0.3},
     ]
 
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.method == "POST"
         assert str(request.url) == expected_url
@@ -391,6 +401,8 @@ def test_rerank_nonfinite_and_boolean_scores_are_rejected(score: str) -> None:
 def test_rerank_budget_checked_before_external_io(
     query: str, documents: tuple[RerankDocument, ...]
 ) -> None:
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def never(_: httpx.Request) -> httpx.Response:
         pytest.fail("budget failure must not send a request")
 
@@ -433,6 +445,8 @@ def test_usage_details_and_extensions_do_not_break_valid_results(provider_kind: 
         "supplier_extension": ["unused"],
     }
 
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def handler(request: httpx.Request) -> httpx.Response:
         requests.append(request)
         if provider_kind == "embedding":
@@ -499,6 +513,8 @@ def test_usage_known_scalar_counts_remain_validated(invalid_count: object) -> No
 def test_llm_uses_json_object_and_local_schema_with_deduplication() -> None:
     requests: list[httpx.Request] = []
 
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def handler(request: httpx.Request) -> httpx.Response:
         requests.append(request)
         return httpx.Response(
@@ -533,6 +549,8 @@ def test_llm_uses_json_object_and_local_schema_with_deduplication() -> None:
 def test_llm_retries_invalid_json_at_most_once(content: object) -> None:
     requests: list[httpx.Request] = []
 
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def handler(request: httpx.Request) -> httpx.Response:
         requests.append(request)
         return httpx.Response(200, json=llm_payload(content))
@@ -573,6 +591,8 @@ def test_llm_schema_repair_changes_prompt_without_echoing_invalid_output(
         first["choices"] = [{"finish_reason": "stop", "message": {"content": invalid_reply}}]
     responses = iter([first, llm_payload({"queries": ["valid query"]})])
 
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def handler(request: httpx.Request) -> httpx.Response:
         requests.append(request)
         return httpx.Response(200, json=next(responses))
@@ -626,6 +646,8 @@ def test_llm_schema_repair_does_not_retry_noncontent_failures(failure_kind: str)
             }
         ]
 
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def handler(request: httpx.Request) -> httpx.Response:
         requests.append(request)
         if failure_kind == "http-json":
@@ -645,6 +667,8 @@ def test_llm_schema_repair_does_not_retry_noncontent_failures(failure_kind: str)
 def test_llm_does_not_retry_authentication_errors() -> None:
     requests: list[httpx.Request] = []
 
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def handler(request: httpx.Request) -> httpx.Response:
         requests.append(request)
         return httpx.Response(401)

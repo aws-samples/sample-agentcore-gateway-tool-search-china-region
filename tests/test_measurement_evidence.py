@@ -186,9 +186,13 @@ def test_cli_preserves_inputs_and_does_not_replace_existing_output(tmp_path):
         "--output",
         str(output),
     ]
+    # Fixed local test program and fixture paths; argv is not request-controlled.
+    # nosemgrep: dangerous-subprocess-use-audit
     assert subprocess.run(command, capture_output=True).returncode == 0  # nosec B603
     actual = output.read_bytes()
     assert json.loads(actual)["backends"][0]["quality_source"]["event_id"] == "event"
+    # Fixed local test program and fixture paths; argv is not request-controlled.
+    # nosemgrep: dangerous-subprocess-use-audit
     assert subprocess.run(command, capture_output=True).returncode != 0  # nosec B603
     assert records.read_bytes() == original
     assert output.read_bytes() == actual

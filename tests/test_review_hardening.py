@@ -109,6 +109,8 @@ def test_dot_named_routes_work_through_every_http_provider(kind):
         "rerank": {"results": [{"index": 0, "relevance_score": 0.9}]},
     }
 
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def handle(request):
         calls.append(str(request.url))
         return httpx.Response(200, json=payloads[kind])

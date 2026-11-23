@@ -60,6 +60,8 @@ def test_replacement_failure_always_releases_starting_count(monkeypatch, tmp_pat
         monkeypatch.setattr(owner, fault, fail_once)
         victim.process.kill()
         victim.process.join(1)
+        # eventually polls this bound callback; evaluating it here would break polling.
+        # nosemgrep: is-function-without-parentheses
         fixtures.eventually(injected.is_set)
         marker.unlink()
         pool.wait_ready(5)

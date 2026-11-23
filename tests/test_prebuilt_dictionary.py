@@ -58,6 +58,8 @@ print(json.dumps(tokens, ensure_ascii=False))
         AWS_SHARED_CREDENTIALS_FILE="/dev/null",
         AWS_EC2_METADATA_DISABLED="true",
     )
+    # Fixed local test program and fixture paths; argv is not request-controlled.
+    # nosemgrep: dangerous-subprocess-use-audit
     result = subprocess.run(  # nosec B603
         [sys.executable, "-c", code, str(custom), str(tmp_path)],
         env=env,

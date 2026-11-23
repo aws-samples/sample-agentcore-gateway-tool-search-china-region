@@ -78,6 +78,8 @@ def copy_build_project(project: Path) -> None:
 def packaged_project(tmp_path_factory: pytest.TempPathFactory) -> Path:
     project = tmp_path_factory.mktemp("dictionary-package")
     copy_build_project(project)
+    # Fixed local test program and fixture paths; argv is not request-controlled.
+    # nosemgrep: dangerous-subprocess-use-audit
     result = subprocess.run(  # nosec B603
         [
             sys.executable,
@@ -98,14 +100,14 @@ def packaged_project(tmp_path_factory: pytest.TempPathFactory) -> Path:
 def setuptools_only_python(tmp_path_factory: pytest.TempPathFactory) -> Path:
     """真正独立的虚拟环境，只复制已声明且已安装的 setuptools 分发物。"""
     declared = tomllib.loads((ROOT / "pyproject.toml").read_text())["build-system"]["requires"]
-    assert declared == ["setuptools==80.9.0"]
+    assert declared == ["setuptools==84.2.1"]
     directory = tmp_path_factory.mktemp("declared-build-environment")
     venv.EnvBuilder(with_pip=False, symlinks=True).create(directory)
     python = directory / "bin" / "python"
     site_packages = directory / "lib" / f"python{sys.version_info.major}.{sys.version_info.minor}"
     site_packages /= "site-packages"
     distribution = importlib.metadata.distribution("setuptools")
-    assert distribution.version == "80.9.0"
+    assert distribution.version == "84.2.1"
     for name in sorted({str(file).split("/")[0] for file in distribution.files or ()}):
         assert name not in {"", ".", ".."}
         source = Path(str(distribution.locate_file(name)))
@@ -113,13 +115,17 @@ def setuptools_only_python(tmp_path_factory: pytest.TempPathFactory) -> Path:
             shutil.copytree(source, site_packages / name)
         else:
             shutil.copyfile(source, site_packages / name)
+    # Fixed local test program and fixture paths; argv is not request-controlled.
+    # nosemgrep: dangerous-subprocess-use-audit
     result = subprocess.run(  # nosec B603
         [
             str(python),
             "-c",
+            # Adjacent literals intentionally form one code snippet or ARN value.
+            # nosemgrep: string-concat-in-list
             "import importlib.metadata as m, importlib.util as u, json; "
             "installed = {d.metadata['Name']: d.version for d in m.distributions()}; "
-            "assert installed == {'setuptools': '80.9.0'}, installed; "
+            "assert installed == {'setuptools': '84.2.1'}, installed; "
             "assert u.find_spec('jieba') is None; print(json.dumps(installed))",
         ],
         env=isolated_environment(directory),
@@ -140,10 +146,14 @@ def test_declared_build_dependencies_are_sufficient(
     project.mkdir()
     copy_build_project(project)
     if source_kind == "sdist":
+        # Fixed local test program and fixture paths; argv is not request-controlled.
+        # nosemgrep: dangerous-subprocess-use-audit
         result = subprocess.run(  # nosec B603
             [
                 str(setuptools_only_python),
                 "-c",
+                # Adjacent literals intentionally form one code snippet or ARN value.
+                # nosemgrep: string-concat-in-list
                 "import setuptools.build_meta as b; "
                 "assert b.get_requires_for_build_sdist({}) == []; b.build_sdist('sdist')",
             ],
@@ -166,10 +176,14 @@ def test_declared_build_dependencies_are_sufficient(
     )
     assert "License: MIT" in (fixed_input / "PKG-INFO").read_text()
     assert_upstream_license((fixed_input / "LICENSE").read_bytes())
+    # Fixed local test program and fixture paths; argv is not request-controlled.
+    # nosemgrep: dangerous-subprocess-use-audit
     result = subprocess.run(  # nosec B603
         [
             str(setuptools_only_python),
             "-c",
+            # Adjacent literals intentionally form one code snippet or ARN value.
+            # nosemgrep: string-concat-in-list
             "import setuptools.build_meta as b; "
             "assert b.get_requires_for_build_wheel({}) == []; b.build_wheel('dist')",
         ],
@@ -196,6 +210,8 @@ def test_wheel_contains_upstream_license(packaged_project: Path) -> None:
 
 
 def test_source_distribution_contains_upstream_license(packaged_project: Path) -> None:
+    # Fixed local test program and fixture paths; argv is not request-controlled.
+    # nosemgrep: dangerous-subprocess-use-audit
     result = subprocess.run(  # nosec B603
         [
             sys.executable,
@@ -218,10 +234,14 @@ def test_source_distribution_contains_upstream_license(packaged_project: Path) -
 
 
 def test_builder_creates_exact_dictionary_without_importing_jieba(tmp_path: Path) -> None:
+    # Fixed local test program and fixture paths; argv is not request-controlled.
+    # nosemgrep: dangerous-subprocess-use-audit
     result = subprocess.run(  # nosec B603
         [
             sys.executable,
             "-c",
+            # Adjacent literals intentionally form one code snippet or ARN value.
+            # nosemgrep: string-concat-in-list
             "import runpy, sys; "
             "sys.modules['jieba'] = None; "
             f"sys.argv = ['build_dictionary.py', '--output-dir', {str(tmp_path)!r}]; "
@@ -286,6 +306,8 @@ def test_clean_project_wheel_contains_pinned_dictionary(packaged_project: Path) 
 def test_wheel_verifier_uses_packaged_dictionary_without_runtime_builder(
     packaged_project: Path,
 ) -> None:
+    # Fixed local test program and fixture paths; argv is not request-controlled.
+    # nosemgrep: dangerous-subprocess-use-audit
     result = subprocess.run(  # nosec B603
         [sys.executable, str(packaged_project / "scripts" / "verify_wheel.py")],
         cwd=packaged_project,
@@ -310,6 +332,8 @@ def test_wheel_verifier_ignores_generated_source_dictionary_caches(
     source_data.mkdir()
     (source_data / "jieba-prefix-v1.json").write_bytes(b"stale previous version")
     (source_data / "jieba-prefix-v2.json").write_bytes(b"corrupt current cache")
+    # Fixed local test program and fixture paths; argv is not request-controlled.
+    # nosemgrep: dangerous-subprocess-use-audit
     result = subprocess.run(  # nosec B603
         [sys.executable, str(isolated / "scripts/verify_wheel.py")],
         cwd=isolated,
@@ -339,6 +363,8 @@ def test_wheel_rebuild_removes_only_generated_dictionary_caches(tmp_path: Path) 
     (build_data / "jieba-prefix-v1.json").write_bytes(b"stale previous version")
     (build_data / "jieba-prefix-v2.json").write_bytes(b"corrupt previous build")
     (build_data / "other-resource.json").write_bytes(b"keep unrelated resource")
+    # Fixed local test program and fixture paths; argv is not request-controlled.
+    # nosemgrep: dangerous-subprocess-use-audit
     built = subprocess.run(  # nosec B603
         [
             sys.executable,
@@ -352,6 +378,8 @@ def test_wheel_rebuild_removes_only_generated_dictionary_caches(tmp_path: Path) 
         timeout=60,
     )
     assert built.returncode == 0, built.stdout + built.stderr
+    # Fixed local test program and fixture paths; argv is not request-controlled.
+    # nosemgrep: dangerous-subprocess-use-audit
     verified = subprocess.run(  # nosec B603
         [sys.executable, str(project / "scripts/verify_wheel.py")],
         cwd=project,
@@ -401,6 +429,8 @@ def test_wheel_verifier_rejects_extra_dictionaries_and_duplicate_entries(
                 archive.writestr(extra_name, data)
         else:
             archive.writestr(extra_name, b"unverified dictionary content")
+    # Fixed local test program and fixture paths; argv is not request-controlled.
+    # nosemgrep: dangerous-subprocess-use-audit
     result = subprocess.run(  # nosec B603
         [sys.executable, str(isolated / "scripts/verify_wheel.py")],
         cwd=isolated,
@@ -433,6 +463,8 @@ def test_sdist_excludes_generated_caches_and_rebuilds_wheel_offline(
             "src/semantic_core/data/jieba-prefix-v1.json\n"
             "src/semantic_core/data/jieba-prefix-v2.json\n"
         )
+    # Fixed local test program and fixture paths; argv is not request-controlled.
+    # nosemgrep: dangerous-subprocess-use-audit
     built = subprocess.run(  # nosec B603
         [
             str(setuptools_only_python),
@@ -465,6 +497,8 @@ def test_sdist_excludes_generated_caches_and_rebuilds_wheel_offline(
         archive.extractall(extracted, filter="data")
     restored = next(extracted.iterdir())
     assert not (restored / ".git").exists()
+    # Fixed local test program and fixture paths; argv is not request-controlled.
+    # nosemgrep: dangerous-subprocess-use-audit
     rebuilt = subprocess.run(  # nosec B603
         [
             str(setuptools_only_python),
@@ -506,6 +540,8 @@ def test_wheel_verifier_rejects_missing_or_corrupt_dictionary(
                     altered.writestr(entry, replacement)
             else:
                 altered.writestr(entry, original.read(entry.filename))
+    # Fixed local test program and fixture paths; argv is not request-controlled.
+    # nosemgrep: dangerous-subprocess-use-audit
     result = subprocess.run(  # nosec B603
         [sys.executable, str(isolated / "scripts" / "verify_wheel.py")],
         cwd=isolated,
@@ -521,6 +557,8 @@ def test_wheel_verifier_rejects_missing_or_corrupt_dictionary(
 def test_source_distribution_can_build_the_dictionary_offline(
     packaged_project: Path, tmp_path: Path
 ) -> None:
+    # Fixed local test program and fixture paths; argv is not request-controlled.
+    # nosemgrep: dangerous-subprocess-use-audit
     built = subprocess.run(  # nosec B603
         [
             sys.executable,
@@ -539,6 +577,8 @@ def test_source_distribution_can_build_the_dictionary_offline(
         assert any(name.endswith("/scripts/build_dictionary.py") for name in archive.getnames())
         archive.extractall(tmp_path, filter="data")
     project = next(path for path in tmp_path.iterdir() if path.is_dir())
+    # Fixed local test program and fixture paths; argv is not request-controlled.
+    # nosemgrep: dangerous-subprocess-use-audit
     rebuilt = subprocess.run(  # nosec B603
         [
             sys.executable,

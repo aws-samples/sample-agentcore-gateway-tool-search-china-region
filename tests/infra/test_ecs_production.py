@@ -10,6 +10,7 @@ import pytest
 from aws_cdk.assertions import Template
 from infra.config import DeploymentConfig, EcsSearchConfig, SecretReference
 from infra.stack import SemsearchStack, documents
+from test_stack import resolve
 
 
 def configuration(region="cn-north-1"):
@@ -97,6 +98,7 @@ def test_default_is_four_lambdas_and_request_is_unchanged(tmp_path):
     after = synth(config, tmp_path / "after")
     assert len(props(before, "AWS::Lambda::Function")) == 4
     assert props(before, "AWS::ECS::Service") == []
+    assert props(before, "AWS::EC2::FlowLog") == []
     before_request = {
         k: v
         for k, v in before["Resources"].items()
@@ -107,6 +109,58 @@ def test_default_is_four_lambdas_and_request_is_unchanged(tmp_path):
     }
     assert before_request == after_request
     assert documents(baseline) == documents(config)
+
+
+@pytest.mark.parametrize("region", ["cn-north-1", "cn-northwest-1"])
+@pytest.mark.parametrize("retention_days", [7, 30])
+def test_ecs_vpc_flow_logs_capture_all_traffic_with_bounded_retention(
+    tmp_path, region, retention_days
+):
+    config = replace(configuration(region), log_retention_days=retention_days)
+    doc = synth(config, tmp_path)
+    flow_logs = props(doc, "AWS::EC2::FlowLog")
+    assert len(flow_logs) == 1
+    flow_log = flow_logs[0]
+    assert flow_log["ResourceId"] == {"Ref": next(iter(resources(doc, "AWS::EC2::VPC")))}
+    assert flow_log["ResourceType"] == "VPC"
+    assert flow_log["TrafficType"] == "ALL"
+    assert flow_log["LogDestinationType"] == "cloud-watch-logs"
+    group_id, group = next(
+        (key, value)
+        for key, value in resources(doc, "AWS::Logs::LogGroup").items()
+        if value["Properties"]["LogGroupName"] == f"{config.prefix}-vpc-flow-logs"
+    )
+    assert flow_log["LogGroupName"] == {"Ref": group_id}
+    assert group["Properties"]["RetentionInDays"] == retention_days
+    assert group["DeletionPolicy"] == group["UpdateReplacePolicy"] == "Retain"
+    role_id = flow_log["DeliverLogsPermissionArn"]["Fn::GetAtt"][0]
+    role = resources(doc, "AWS::IAM::Role")[role_id]
+    trust = role["Properties"]["AssumeRolePolicyDocument"]["Statement"]
+    assert len(trust) == 1
+    assert trust[0]["Principal"] == {"Service": "vpc-flow-logs.amazonaws.com"}
+    assert (
+        resolve(trust[0]["Condition"]["StringEquals"]["aws:SourceAccount"], config)
+        == config.account
+    )
+    assert resolve(trust[0]["Condition"]["ArnLike"]["aws:SourceArn"], config) == (
+        f"arn:aws-cn:ec2:{region}:{config.account}:vpc-flow-log/*"
+    )
+    assert not role["Properties"].get("ManagedPolicyArns")
+    assert all(
+        {"Ref": role_id} not in policy.get("Roles", [])
+        for policy in props(doc, "AWS::IAM::ManagedPolicy")
+    )
+    assert statements(doc, role_id) == [
+        {
+            "Action": [
+                "logs:CreateLogStream",
+                "logs:PutLogEvents",
+                "logs:DescribeLogStreams",
+            ],
+            "Effect": "Allow",
+            "Resource": {"Fn::GetAtt": [group_id, "Arn"]},
+        }
+    ]
 
 
 def test_ecs_task_is_bounded_nonroot_readonly_and_uses_immutable_image(enabled):

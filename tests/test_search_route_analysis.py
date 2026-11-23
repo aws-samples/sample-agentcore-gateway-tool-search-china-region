@@ -306,6 +306,8 @@ def test_cli_collects_export_wrappers_retains_invalid_line_count_and_writes_repo
     )
     output = tmp_path / "report.json"
     collected = tmp_path / "collected.jsonl"
+    # Fixed local test program and fixture paths; argv is not request-controlled.
+    # nosemgrep: dangerous-subprocess-use-audit
     result = subprocess.run(  # nosec B603
         [
             sys.executable,

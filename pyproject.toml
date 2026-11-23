@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools==80.9.0"]
+requires = ["setuptools==84.2.1"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -19,15 +19,15 @@ dependencies = [
     "numpy==2.3.4",
     "jieba==0.42.1",
     "jsonschema==4.25.1",
-    # jieba uses pkg_resources without declaring setuptools in its metadata.
-    "setuptools==80.9.0",
+    # Keep the build backend and the Lambda wheel closure on the same security-patched release.
+    "setuptools==84.2.1",
 ]
 
 [project.optional-dependencies]
 dev = [
     "aws-cdk-lib==2.273.0",
     "constructs==10.8.1",
-    "pytest==8.4.2",
+    "pytest==9.0.3",
     "pytest-cov==7.0.0",
     "ruff==0.14.0",
     "mypy==1.18.2",

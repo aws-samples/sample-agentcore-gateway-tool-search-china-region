@@ -374,6 +374,8 @@ def test_request_package_runs_with_only_its_dependency_closure(
             if source.exists() and not target.exists():
                 target.symlink_to(source, target_is_directory=source.is_dir())
     script = Path("tests/fixtures/request-package-smoke.py").resolve()
+    # Fixed local test program and fixture paths; argv is not request-controlled.
+    # nosemgrep: dangerous-subprocess-use-audit
     result = subprocess.run(  # nosec B603
         [sys.executable, "-I", "-S", str(script), str(isolated)],
         env={
@@ -433,7 +435,7 @@ def _request_build_fixture(tmp_path, monkeypatch, *, requirements=(), names=("ro
         "architecture": "x86_64",
         "platform": "manylinux_2_34_x86_64",
         "source_date_epoch": 315532800,
-        "build_backend": {"name": "setuptools", "version": "80.9.0"},
+        "build_backend": {"name": "setuptools", "version": "84.2.1"},
         "wheels": wheels,
     }
     lock_path = project / "lambda-wheels.lock.json"
@@ -485,6 +487,8 @@ def test_request_closure_uses_target_markers_without_optional_extras(
     "source",
     [
         "from semantic_service.unshipped import work\n",
+        # Adjacent literals intentionally form one code snippet or ARN value.
+        # nosemgrep: string-concat-in-list
         "def request_handler():\n"
         "    from semantic_service.unshipped import work\n    return work()\n",
         "from . import unshipped\n",

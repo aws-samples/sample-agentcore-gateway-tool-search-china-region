@@ -394,7 +394,7 @@ def build_jieba(wheel: WheelArtifact, lock: BuildLock, wheelhouse: Path, *, offl
     wheelhouse = wheelhouse.resolve()
     backend = lock["build_backend"]
     if (
-        backend != {"name": "setuptools", "version": "80.9.0"}
+        backend != {"name": "setuptools", "version": "84.2.1"}
         or importlib.metadata.version(backend["name"]) != backend["version"]
     ):
         raise ValueError("Install the exact hash-locked requirements-build.lock backend.")

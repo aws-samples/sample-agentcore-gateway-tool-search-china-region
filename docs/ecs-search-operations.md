@@ -307,7 +307,7 @@ NLB 入站已改 internal 且限 facade SG；本地候选 task 无公网 IP，�
 
 ## 首次部署失败后的清理与重试
 
-NLB不开启deletion protection，CloudFormation可正常删除或替换它；7个日志组、
+NLB不开启deletion protection，CloudFormation可正常删除或替换它；8个日志组（含 VPC Flow Logs）、
 3个DynamoDB表与索引S3桶是栈管理的Retain资源，3表均有deletion protection，
 不能只核对replay。配置桶通过参数导入，栈不创建或修改它；其版本化、private/TLS-only
 须按[外部前置条件](deploy.md#前置条件)核对，属性与生命周期由外部负责人管理。

@@ -32,7 +32,7 @@ def test_target_audit_selects_request_wheels_and_runtime_roots(tmp_path, monkeyp
         "architecture": "x86_64",
         "platform": "manylinux_2_34_x86_64",
         "source_date_epoch": 315532800,
-        "build_backend": {"name": "setuptools", "version": "80.9.0"},
+        "build_backend": {"name": "setuptools", "version": "84.2.1"},
         "wheels": wheels,
     }
     (tmp_path / "lambda-wheels.lock.json").write_text(json.dumps(lock))

@@ -163,6 +163,8 @@ def test_documented_finch_loop_preserves_the_first_failure():
       esac
     }
     """
+    # Execute the committed shell example with local stubs, never external input.
+    # nosemgrep: dangerous-subprocess-use-audit
     result = subprocess.run(  # nosec B603
         ["/bin/sh", "-c", stubs + snippet],
         env={},

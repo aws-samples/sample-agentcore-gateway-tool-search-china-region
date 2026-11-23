@@ -134,6 +134,8 @@ def prefetch_transport_response(self, request):
 
 client = httpx.Client(transport=httpx.MockTransport(metadata_response), trust_env=False)
 # Install the request-path client; prefetch creates its own production client.
+# This is a valid lambda callback, not a module-level return statement.
+# nosemgrep: return-not-in-function
 runtime._http = lambda: client
 with ExitStack() as stack:
     from semantic_service import _request_prefetch
@@ -161,6 +163,8 @@ for service in ("s3", "dynamodb", "secretsmanager"):
 tool = handler.config.search_tool
 now = int(time.time())
 # Freeze only the wall clock; the production limiter still issues the conditional update.
+# This is a valid lambda callback, not a module-level return statement.
+# nosemgrep: return-not-in-function
 handler.limiter.clock = lambda: now
 store = runtime._store()
 policy = {

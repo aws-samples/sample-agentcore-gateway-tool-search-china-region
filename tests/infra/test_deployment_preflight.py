@@ -403,6 +403,8 @@ def test_cli_overlay_and_recovery_remain_offline_and_preserve_live_metadata(tmp_
     output = tmp_path / "candidate.json"
     live.write_text(json.dumps(live_template()))
     replacements.write_text(json.dumps({"Service": live_template()["Resources"]["Service"]}))
+    # Fixed local test program and fixture paths; argv is not request-controlled.
+    # nosemgrep: dangerous-subprocess-use-audit
     result = subprocess.run(  # nosec B603
         [
             sys.executable,
@@ -439,6 +441,8 @@ def test_cli_rejects_duplicate_metadata_before_writing_output(tmp_path):
     source = tmp_path / "ambiguous.json"
     source.write_text('{"Resources": {}, "Resources": {"secret": "hidden"}}')
     output = tmp_path / "candidate.json"
+    # Fixed local test program and fixture paths; argv is not request-controlled.
+    # nosemgrep: dangerous-subprocess-use-audit
     result = subprocess.run(  # nosec B603
         [
             sys.executable,

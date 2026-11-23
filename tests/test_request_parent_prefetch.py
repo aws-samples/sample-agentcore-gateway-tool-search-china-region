@@ -64,6 +64,8 @@ def test_real_parent_client_is_separate_closed_and_cache_used(
     assert client_boundary[1] == [os.getpid(), os.getpid()]
     assert len(client_boundary[0]) == 1
     assert client_boundary[0][0] is not fixture.client
+    # is_closed is a boolean property; calling it would be incorrect.
+    # nosemgrep: is-function-without-parentheses
     assert client_boundary[0][0].is_closed and not fixture.client.is_closed
     assert fixture.verifier._expires == fixture.now + 300
     assert elapsed < 3
@@ -127,6 +129,8 @@ def test_absolute_deadline_interrupts_blocking_io(
     assert fields == {"status": "failed", "failure_kind": "deadline"}
     assert 0.1 < elapsed < 0.35
     assert not fixture.verifier._keys
+    # is_closed is a boolean property; calling it would be incorrect.
+    # nosemgrep: is-function-without-parentheses
     assert all(client.is_closed for client in client_boundary[0])
 
 
@@ -174,6 +178,8 @@ def test_optional_prefetch_exceptions_never_escape(
     assert fields == expected
     assert fixture.verifier._keys == {}
     assert fixture.verifier._expires == -math.inf
+    # is_closed is a boolean property; calling it would be incorrect.
+    # nosemgrep: is-function-without-parentheses
     assert all(client.is_closed for client in client_boundary[0])
 
 
@@ -248,6 +254,8 @@ def test_logs_after_deadline_do_not_block_cleanup(
         fields, _, elapsed = run(fixture, budget_seconds=0.15, log_fd=write_fd)
         assert fields["failure_kind"] == "deadline"
         assert elapsed < 0.35
+        # is_closed is a boolean property; calling it would be incorrect.
+        # nosemgrep: is-function-without-parentheses
         assert all(client.is_closed for client in client_boundary[0])
     finally:
         os.close(read_fd)
@@ -326,6 +334,8 @@ def test_native_overrun_still_closes_independent_client(
     fixture.steps["jwks"] = [late_response]
     fields, _, _ = run(fixture)
     assert fields["failure_kind"] == "deadline"
+    # is_closed is a boolean property; calling it would be incorrect.
+    # nosemgrep: is-function-without-parentheses
     assert client_boundary[0][0].is_closed
     assert fixture.verifier._keys == {}
 
@@ -421,6 +431,8 @@ def test_final_adoption_rejects_metadata_after_monotonic_deadline(
     assert nonempty_stores == [], "expired metadata was briefly adopted before rollback"
     assert fixture.verifier._keys == {} and fixture.verifier._expires == -math.inf
     assert fixture.endpoints == ["discovery", "jwks"]
+    # is_closed is a boolean property; calling it would be incorrect.
+    # nosemgrep: is-function-without-parentheses
     assert client_boundary[0][0].is_closed
 
 
@@ -444,6 +456,8 @@ def test_final_adoption_clamps_ttl_after_parent_clock_moves_back(
     assert fixture.verifier._keys
     assert fixture.verifier._expires == original_now + 240
     assert fixture.verifier._expires == fixture.now + fixture.config.cache_seconds
+    # is_closed is a boolean property; calling it would be incorrect.
+    # nosemgrep: is-function-without-parentheses
     assert client_boundary[0][0].is_closed
 
 
@@ -464,6 +478,8 @@ def test_final_adoption_rejects_expiry_after_parent_clock_moves_forward(
     assert len(clock_calls) == 3
     assert fields == {"status": "failed", "failure_kind": "structural"}
     assert fixture.verifier._keys == {} and fixture.verifier._expires == -math.inf
+    # is_closed is a boolean property; calling it would be incorrect.
+    # nosemgrep: is-function-without-parentheses
     assert client_boundary[0][0].is_closed
 
 
@@ -580,4 +596,6 @@ def test_deadline_crossed_during_timer_teardown_rolls_back_cache(
     assert fields == {"status": "failed", "failure_kind": "deadline"}
     assert fixture.verifier._keys == {} and fixture.verifier._expires == -math.inf
     assert fixture.endpoints == ["discovery", "jwks"]
+    # is_closed is a boolean property; calling it would be incorrect.
+    # nosemgrep: is-function-without-parentheses
     assert client_boundary[0][0].is_closed

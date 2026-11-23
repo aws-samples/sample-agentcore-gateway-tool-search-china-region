@@ -234,6 +234,8 @@ def test_delivery_and_runtime_budget_relationships_reject_invalid_values(name, r
     lines[matching[0]] = f"{name} = {replacement}"
     with pytest.raises(ValueError, match="routing budget"):
         # Fixed local test fixture source; never supplied by a request.
+        # Only repository source with fixed test substitutions is executed locally.
+        # nosemgrep: exec-detected
         exec(compile("\n".join(lines), "<invalid-budget-fixture>", "exec"), {})  # nosec B102
 
 

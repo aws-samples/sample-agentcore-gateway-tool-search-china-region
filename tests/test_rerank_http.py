@@ -65,6 +65,8 @@ def test_portable_model_can_be_configured() -> None:
 
 
 def test_portable_flat_endpoint_is_explicit() -> None:
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def handler(request: httpx.Request) -> httpx.Response:
         assert str(request.url) == f"https://{HOST}/v1/rerank"
         return httpx.Response(
@@ -101,6 +103,8 @@ def test_portable_score_field_is_configurable() -> None:
 def test_flat_wire_contract_appends_prefix_and_uses_only_explicit_headers(score_field: str) -> None:
     requests: list[httpx.Request] = []
 
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def handler(request: httpx.Request) -> httpx.Response:
         requests.append(request)
         assert str(request.url) == f"https://{HOST}:8443/model-proxy/v1/rerank"
@@ -155,6 +159,8 @@ def test_bailian_presets_preserve_exact_request_and_response_contract(model: str
     )
     results = [{"index": 1, "relevance_score": 0.9}, {"index": 0, "relevance_score": 0.4}]
 
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def handler(request: httpx.Request) -> httpx.Response:
         assert str(request.url) == f"https://{HOST}{expected_path}"
         expected: dict[str, object] = (
@@ -197,6 +203,8 @@ def test_only_bailian_presets_restrict_model_names() -> None:
 def test_native_codec_also_accepts_an_independent_model_path_and_score_key() -> None:
     codec = RerankCodec(path="/custom/rank", envelope="bailian-native", score_field="score")
 
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def handler(request: httpx.Request) -> httpx.Response:
         assert str(request.url) == f"https://{HOST}/custom/rank"
         assert json.loads(request.content) == {
@@ -230,6 +238,8 @@ def test_configured_byte_and_count_budgets_reject_before_http(
 ) -> None:
     requests: list[httpx.Request] = []
 
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def never(request: httpx.Request) -> httpx.Response:
         requests.append(request)
         return httpx.Response(500)
@@ -352,6 +362,8 @@ def test_response_envelope_must_match_explicit_codec(
 
 
 def test_full_candidate_top_n_is_required_before_http() -> None:
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def never(_: httpx.Request) -> httpx.Response:
         pytest.fail("partial-candidate request must not be sent")
 

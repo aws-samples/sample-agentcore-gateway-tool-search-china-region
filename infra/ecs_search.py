@@ -78,6 +78,33 @@ class EcsSearch(Construct):
                 ),
             ],
         )
+        flow_log_group = logs.LogGroup(
+            self,
+            "VpcFlowLogs",
+            log_group_name=f"{prefix}-vpc-flow-logs",
+            retention=retention,
+            removal_policy=RemovalPolicy.RETAIN,
+        )
+        flow_log_role = iam.Role(
+            self,
+            "VpcFlowLogRole",
+            assumed_by=iam.ServicePrincipal(
+                "vpc-flow-logs.amazonaws.com",
+                conditions={
+                    "StringEquals": {"aws:SourceAccount": Aws.ACCOUNT_ID},
+                    "ArnLike": {
+                        "aws:SourceArn": (
+                            f"arn:{Aws.PARTITION}:ec2:{Aws.REGION}:{Aws.ACCOUNT_ID}:vpc-flow-log/*"
+                        )
+                    },
+                },
+            ),
+        )
+        vpc.add_flow_log(
+            "FlowLog",
+            destination=ec2.FlowLogDestination.to_cloud_watch_logs(flow_log_group, flow_log_role),
+            traffic_type=ec2.FlowLogTrafficType.ALL,
+        )
         self.facade_subnet_ids = vpc.select_subnets(
             subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS
         ).subnet_ids

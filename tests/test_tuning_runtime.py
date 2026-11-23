@@ -179,6 +179,8 @@ def test_http_error_attempt_is_persisted_and_budget_stops_next_transport_call(
     ledger = Ledger(tmp_path, caps={"embedding": 1, "rerank": 1, "chat": 1})
     sent: list[httpx.Request] = []
 
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def transport(request: httpx.Request) -> httpx.Response:
         sent.append(request)
         return httpx.Response(503, json={"error": "not retained"})

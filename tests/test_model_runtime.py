@@ -105,6 +105,8 @@ def test_rotation_refreshes_once_and_preserves_request_deadline():
     sdk = FakeSecrets([secret(key="old-synthetic"), secret("v2", "new-synthetic")])
     requests = []
 
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def handle(request):
         requests.append(request)
         assert str(request.url) == "https://models.invalid/v1/embeddings"
@@ -125,6 +127,8 @@ def test_persistent_auth_failure_is_bounded_and_secret_failure_is_provider_unava
     sdk = FakeSecrets([secret(), secret("v2")])
     requests = []
 
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def handle(request):
         requests.append(request)
         return httpx.Response(401)
@@ -144,6 +148,8 @@ def test_persistent_auth_failure_is_bounded_and_secret_failure_is_provider_unava
 
 
 def test_chat_has_independent_budget_json_object_and_local_validation():
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def handle(request):
         assert str(request.url) == "https://models.invalid/v1/chat/completions"
         assert request.extensions["timeout"]["read"] > 0.45
@@ -182,6 +188,8 @@ def test_rotation_retry_uses_original_deadline_after_elapsed_first_request(monke
     monkeypatch.setattr("semantic_core.providers.time.monotonic", lambda: clock[0])
     requests = []
 
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def handle(request):
         requests.append(request)
         if len(requests) == 1:
@@ -233,6 +241,8 @@ def test_rotation_setup_failure_keeps_http_diagnostics_only_for_the_current_call
     )
     requests = []
 
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def handle(request):
         requests.append(request)
         return httpx.Response(status, headers={"Retry-After": "11"})
@@ -259,7 +269,7 @@ def test_rotation_setup_failure_keeps_http_diagnostics_only_for_the_current_call
     assert first.value.code is second.value.code is expected_code
     assert first.value.failure.kind == "http_client_error"
     assert first.value.failure.http_status == status
-    # 既有 HTTP 采集策略只接受 429/503 的 Retry-After，本轮不扩大白名单。
+    # HTTP 采集策略只接受 429/503 的 Retry-After。
     assert first.value.failure.retry_after_seconds is None
     assert second.value.failure == ProviderFailure(expected_code.value)
     assert len(requests) == 1
@@ -347,6 +357,8 @@ def test_runtime_provider_failures_degrade_without_authorization_leak(failure_ki
     )
     calls = []
 
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def handle(request):
         calls.append(str(request.url))
         assert request.headers["Authorization"] == "Bearer synthetic-key"

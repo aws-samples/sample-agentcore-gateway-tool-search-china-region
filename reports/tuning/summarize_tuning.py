@@ -292,27 +292,26 @@ def _delta_table(comparisons: Sequence[Mapping[str, Any]]) -> str:
 
 def _method_note() -> str:
     return (
-        ("Paired changes use 2,000 seeded percentile bootstrap resamples of normalized query "
+        "Paired changes use 2,000 seeded percentile bootstrap resamples of normalized query "
         + "text groups; all observations for a sampled group stay together. Point estimates "
         + "remain query-macro averages. Intervals are descriptive, are not corrected for dev "
         + "selection/multiple comparisons, and cannot remove synthetic template or catalog bias. "
         + "Errors remain in denominators. Retrieval latency adds the shared live query-embedding "
-        + "time to each arm's local/rerank time; it is a reconstructed comparison, not independently "
+        + "time to each arm's local/rerank time; it is a reconstructed comparison, "
+        "not independently "
         + "repeated network latency. Index builds are excluded. Absolute summaries and all "
-        + "language/permission/relevance-count cohorts remain in the companion analysis JSON.")
+        + "language/permission/relevance-count cohorts remain in the companion analysis JSON."
     )
 
 
 def _historical_note() -> str:
     return (
-        ("Historical evidence, not independent confirmation: before this split, sem-eval-real "
-        + "already showed vector Recall@5 93.67% versus RRF 85.69%; 75 test texts had been "
-        + "observed. The partition is at most semi-independent evidence about the threshold, "
-        + "not an unbiased test of fusion selection. There are only 26 synthetic templates and "
-        + "no exact tool-name or underscore-ID queries, so the vector advantage cannot be "
-        + "generalized to identifier/abbreviation workloads. The old files have no externally "
-        + "verifiable dev/test timestamps; internal claim hashes do not establish chronology. "
-        + "Current defaults and the stored recommendation remain unchanged.")
+        "Split provenance is incomplete: without externally verifiable dev/test timestamps, "
+        + "prior exposure to test queries cannot be ruled out. Treat threshold comparisons as "
+        + "semi-independent evidence, not an unbiased test of fusion selection. Synthetic "
+        + "templates and missing exact tool-name or underscore-ID queries limit generalization "
+        + "to identifier/abbreviation workloads. "
+        + "Current defaults and the stored recommendation remain unchanged."
     )
 
 
@@ -327,11 +326,11 @@ def _provenance_note(recommendation: Mapping[str, Any]) -> str:
     if _legacy_recommendation(recommendation):
         return _historical_note()
     return (
-        ("This subsequent synthetic evaluation records dev_finished_at and a split-manifest "
+        "This subsequent synthetic evaluation records dev_finished_at and a split-manifest "
         + "hash. The external capture reference is not authenticated by the harness; verify "
         + "the capture and its timing independently. These fields do not establish historical "
         + "chronology or make the previously observed synthetic corpus an unseen human holdout. "
-        + "Template and catalog bias remain. Serving defaults are unchanged.")
+        + "Template and catalog bias remain. Serving defaults are unchanged."
     )
 
 
@@ -348,36 +347,42 @@ def _grid_note(runs: Sequence[Run], recommendation: Mapping[str, Any]) -> str:
     )
     if _legacy_recommendation(recommendation) and steps == [0.1]:
         return (
-            ("The historical cosine grid has 0.1 spacing: its 0.6 cliff is not fine calibration. "
-            + "Future runs include 0.05 steps, without changing this frozen recommendation.")
+            "The historical cosine grid has 0.1 spacing: its 0.6 cliff is not fine calibration. "
+            + "Future runs include 0.05 steps, without changing this frozen recommendation."
         )
     return (
         "Recorded cosine cutoffs: "
         + (", ".join(f"{value:g}" for value in cutoffs) or "none")
         + ". Adjacent grid steps: "
         + (", ".join(f"{value:g}" for value in steps) or "not applicable")
-        + (". A finer evaluation grid does not establish calibration outside this model/revision "
-        + "or change serving defaults.")
+        + (
+            ". A finer evaluation grid does not establish calibration outside this model/revision "
+            + "or change serving defaults."
+        )
     )
 
 
 def _test_scope_note(recommendation: Mapping[str, Any], *, ungated_control: bool) -> str:
     legacy = _legacy_recommendation(recommendation)
     opening = (
-        ("This is an offline correction of the one completed test report. No model calls or "
-        + "new tuning follow. ")
+        (
+            "This is an offline correction of the one completed test report. No model calls or "
+            + "new tuning follow. "
+        )
         if legacy
         else "This report summarizes the recorded test artifacts without further model calls. "
     )
     if ungated_control:
-        return (
-            opening + ("The recorded vector_ungated control is compared with recommended to assess "
+        return opening + (
+            "The recorded vector_ungated control is compared with recommended to assess "
             + "gate cost when their fusion settings agree; this control does not remove "
-            + "synthetic selection or template bias.")
+            + "synthetic selection or template bias."
         )
     return opening + (
-        ("The historical test omitted ungated vector, so fusion improvement "
-        + "and threshold recall cost cannot be separated on test.")
+        (
+            "The historical test omitted ungated vector, so fusion improvement "
+            + "and threshold recall cost cannot be separated on test."
+        )
         if legacy
         else "No ungated-vector arm was recorded, so this test cannot isolate gate cost."
     )
@@ -415,16 +420,26 @@ def _tradeoff_svg(runs: Sequence[Run], chosen_arm: str) -> str:
         return left + width * point[1], top + height * (1 - point[2])
 
     parts = [
-        ('<svg xmlns="http://www.w3.org/2000/svg" width="1020" height="700" '
-        + 'viewBox="0 0 1020 700" role="img" aria-labelledby="title desc">'),
-        ('<title id="title">Dev threshold tradeoff: recall versus empty false '
-        + "recommendations</title>"),
-        ('<desc id="desc">Synthetic data, not quality acceptance. Lower empty false recommendation '
-        + "and higher recall are better. Blue circles show cosine cutoffs; dashed orange squares "
-        + "show within-request margin cutoffs. Labels are cutoff values; coincident points share "
-        + "labels. The dark diamond is ungated and a black ring marks the selected recommendation. "
-        + "Exact source rates are in each point title and the metadata; the full table is in "
-        + "dev-report.md.</desc>"),
+        (
+            '<svg xmlns="http://www.w3.org/2000/svg" width="1020" height="700" '
+            + 'viewBox="0 0 1020 700" role="img" aria-labelledby="title desc">'
+        ),
+        (
+            '<title id="title">Dev threshold tradeoff: recall versus empty false '
+            + "recommendations</title>"
+        ),
+        (
+            '<desc id="desc">Synthetic data, not quality acceptance. '
+            + "Lower empty false recommendation "
+            + "and higher recall are better. Blue circles show cosine "
+            + "cutoffs; dashed orange squares "
+            + "show within-request margin cutoffs. Labels are cutoff "
+            + "values; coincident points share "
+            + "labels. The dark diamond is ungated and a black ring "
+            + "marks the selected recommendation. "
+            + "Exact source rates are in each point title and the metadata; the full table is in "
+            + "dev-report.md.</desc>"
+        ),
         "<metadata>" + html.escape(json.dumps(metadata, ensure_ascii=False)) + "</metadata>",
         '<rect width="1020" height="700" fill="#ffffff"/>',
         '<g font-family="Arial, Helvetica, sans-serif" fill="#172033">',
@@ -438,18 +453,26 @@ def _tradeoff_svg(runs: Sequence[Run], chosen_arm: str) -> str:
             [
                 f'<path d="M{x:.2f},{top} V{top + height}" stroke="#e2e8f0"/>',
                 f'<path d="M{left},{y:.2f} H{left + width}" stroke="#e2e8f0"/>',
-                (f'<text x="{x:.2f}" y="{top + height + 24}" font-size="13" '
-                + f'text-anchor="middle">{tick}</text>'),
-                (f'<text x="{left - 14}" y="{y + 5:.2f}" font-size="13" '
-                + f'text-anchor="end">{tick}</text>'),
+                (
+                    f'<text x="{x:.2f}" y="{top + height + 24}" font-size="13" '
+                    + f'text-anchor="middle">{tick}</text>'
+                ),
+                (
+                    f'<text x="{left - 14}" y="{y + 5:.2f}" font-size="13" '
+                    + f'text-anchor="end">{tick}</text>'
+                ),
             ]
         )
     parts.extend(
         [
-            (f'<path d="M{left},{top} V{top + height} H{left + width}" '
-            + 'stroke="#64748b" fill="none"/>'),
-            ('<text x="510" y="632" font-size="14" text-anchor="middle">'
-            + "Empty false recommendation (%) — lower is better</text>"),
+            (
+                f'<path d="M{left},{top} V{top + height} H{left + width}" '
+                + 'stroke="#64748b" fill="none"/>'
+            ),
+            (
+                '<text x="510" y="632" font-size="14" text-anchor="middle">'
+                + "Empty false recommendation (%) — lower is better</text>"
+            ),
         ]
     )
     for family, color, dash, legend_x in (
@@ -461,8 +484,8 @@ def _tradeoff_svg(runs: Sequence[Run], chosen_arm: str) -> str:
             path = ([baseline] if baseline is not None else []) + values
             coordinates = " ".join(f"{x:.2f},{y:.2f}" for x, y in map(position, path))
             parts.append(
-                (f'<polyline points="{coordinates}" fill="none" stroke="{color}" '
-                + f'stroke-width="2"{dash}/>')
+                f'<polyline points="{coordinates}" fill="none" stroke="{color}" '
+                + f'stroke-width="2"{dash}/>'
             )
         parts.extend(
             [
@@ -490,23 +513,23 @@ def _tradeoff_svg(runs: Sequence[Run], chosen_arm: str) -> str:
                 parts.append(f'<circle cx="{x:.2f}" cy="{y:.2f}" r="5" fill="{color}"/>')
             else:
                 parts.append(
-                    (f'<rect x="{x - 4.5:.2f}" y="{y - 4.5:.2f}" width="9" height="9" '
-                    + f'fill="{color}"/>')
+                    f'<rect x="{x - 4.5:.2f}" y="{y - 4.5:.2f}" width="9" height="9" '
+                    + f'fill="{color}"/>'
                 )
             parts.append("</g>")
     if baseline is not None:
         x, y = position(baseline)
         labeled.append(("ungated", x, y, "#334155", "ungated", chosen_arm == "ungated"))
         parts.append(
-            (f'<path d="M{x:.2f},{y - 7:.2f} l7,7 l-7,7 l-7,-7 z" fill="#334155">'
+            f'<path d="M{x:.2f},{y - 7:.2f} l7,7 l-7,7 l-7,-7 z" fill="#334155">'
             + f"<title>ungated: Recall@5={baseline[2] * 100!r}%; "
-            + f"empty false={baseline[1] * 100!r}%</title></path>")
+            + f"empty false={baseline[1] * 100!r}%</title></path>"
         )
     for label, x, y, color, family, selected in labeled:
         if selected:
             parts.append(
-                (f'<circle cx="{x:.2f}" cy="{y:.2f}" r="10" fill="none" '
-                + 'stroke="#111827" stroke-width="2"/>')
+                f'<circle cx="{x:.2f}" cy="{y:.2f}" r="10" fill="none" '
+                + 'stroke="#111827" stroke-width="2"/>'
             )
         text_width = len(label) * 7.1 + 8
         offsets = (-17, 28, -39, 50, -61, 72, -83, 94)
@@ -535,21 +558,31 @@ def _tradeoff_svg(runs: Sequence[Run], chosen_arm: str) -> str:
         tx, ty = placement
         parts.extend(
             [
-                (f'<path d="M{x:.2f},{y:.2f} L{tx:.2f},{ty - 4:.2f}" '
-                + f'stroke="{color}" stroke-opacity=".5" fill="none"/>'),
-                (f'<rect x="{tx - 3:.2f}" y="{ty - 13:.2f}" width="{text_width:.2f}" '
-                + 'height="18" rx="2" fill="#fff" fill-opacity=".94"/>'),
-                (f'<text x="{tx:.2f}" y="{ty:.2f}" font-size="12" fill="{color}" '
-                + ">") + html.escape(label) + "</text>",
+                (
+                    f'<path d="M{x:.2f},{y:.2f} L{tx:.2f},{ty - 4:.2f}" '
+                    + f'stroke="{color}" stroke-opacity=".5" fill="none"/>'
+                ),
+                (
+                    f'<rect x="{tx - 3:.2f}" y="{ty - 13:.2f}" width="{text_width:.2f}" '
+                    + 'height="18" rx="2" fill="#fff" fill-opacity=".94"/>'
+                ),
+                (f'<text x="{tx:.2f}" y="{ty:.2f}" font-size="12" fill="{color}" ' + ">")
+                + html.escape(label)
+                + "</text>",
             ]
         )
     parts.extend(
         [
-            ('<text x="88" y="666" font-size="12" fill="#475569">'
-            + "Labels = cutoff values; lines follow increasing cutoffs; black ring = recommendation."
-            + "</text>"),
-            ('<text x="88" y="687" font-size="12" fill="#475569">'
-            + "Dev only. No absolute reranker-score cutoff. Source: dev-threshold.json.</text>"),
+            (
+                '<text x="88" y="666" font-size="12" fill="#475569">'
+                + "Labels = cutoff values; lines follow increasing cutoffs; "
+                + "black ring = recommendation."
+                + "</text>"
+            ),
+            (
+                '<text x="88" y="687" font-size="12" fill="#475569">'
+                + "Dev only. No absolute reranker-score cutoff. Source: dev-threshold.json.</text>"
+            ),
             "</g></svg>",
         ]
     )
@@ -587,9 +620,11 @@ def summarize_dev(output: Path, queries: Sequence[EvalQuery]) -> None:
         "",
         NOTICE,
         "",
-        (f"Frozen recommendation: fusion `{recommendation['chosen_fusion_arm']}`, "
-        + f"threshold `{recommendation['chosen_threshold_arm']}`. "
-        + "This recommendation does not change service defaults; rerank stays off."),
+        (
+            f"Frozen recommendation: fusion `{recommendation['chosen_fusion_arm']}`, "
+            + f"threshold `{recommendation['chosen_threshold_arm']}`. "
+            + "This recommendation does not change service defaults; rerank stays off."
+        ),
         "",
         recommendation["selection_rule"],
         "",
@@ -615,11 +650,15 @@ def summarize_dev(output: Path, queries: Sequence[EvalQuery]) -> None:
     lines.extend(
         [
             "",
-            ("The threshold table is the full predeclared tradeoff curve. Cosine cutoffs use "
-            + "normalized embedding similarity and remain model/domain specific. Margin cutoffs "
-            + "are within-request top1 minus authorized-score median gaps. No absolute reranker "
-            + "score threshold is used. A candidate cutoff is accepted only when Recall, Hit, "
-            + "and MRR each lose at most 1 percentage point versus the selected ungated fusion."),
+            (
+                "The threshold table is the full predeclared tradeoff curve. Cosine cutoffs use "
+                + "normalized embedding similarity and remain "
+                + "model/domain specific. Margin cutoffs "
+                + "are within-request top1 minus authorized-score median "
+                + "gaps. No absolute reranker "
+                + "score threshold is used. A candidate cutoff is accepted only when Recall, Hit, "
+                + "and MRR each lose at most 1 percentage point versus the selected ungated fusion."
+            ),
             _grid_note(groups["threshold"], recommendation),
             "",
             "[Detailed cohort estimates and paired changes](dev-analysis.json).",
@@ -851,17 +890,25 @@ def summarize_knee(
                 ],
             ),
             "",
-            ("Queries and nested distractor catalogs are paired across all sizes and arms; "
-            + "arm order is randomized deterministically per pair. Knee texts are unique, so the "
-            + "text-group bootstrap has one query per cluster. Prompt reduction uses summed "
-            + "provider-reported prompt tokens on complete pairs only; missing usage is not zero. "
-            + "Accuracy is identity selection, with no tool execution. Provider/model weights "
-            + "are not pinned; these five catalog sizes do not establish a production breakpoint."),
+            (
+                "Queries and nested distractor catalogs are paired across all sizes and arms; "
+                + "arm order is randomized deterministically per pair. "
+                + "Knee texts are unique, so the "
+                + "text-group bootstrap has one query per cluster. Prompt reduction uses summed "
+                + "provider-reported prompt tokens on complete pairs "
+                + "only; missing usage is not zero. "
+                + "Accuracy is identity selection, with no tool execution. Provider/model weights "
+                + "are not pinned; these five catalog sizes do not "
+                + "establish a production breakpoint."
+            ),
             "",
-            ("The rerank arm is experimental and remains default-off. At 500 tools the "
-            + "nonrerank candidate must be assessed separately from rerank. Candidate IDs and "
-            + "error/usage observations, including retrieval versus selection misses, are "
-            + "retained in the analysis JSON; an invalid response alone does not prove truncation."),
+            (
+                "The rerank arm is experimental and remains default-off. At 500 tools the "
+                + "nonrerank candidate must be assessed separately from rerank. Candidate IDs and "
+                + "error/usage observations, including retrieval versus selection misses, are "
+                + "retained in the analysis JSON; "
+                + "an invalid response alone does not prove truncation."
+            ),
         ]
     )
     return rendered, {"runs": runs, "comparisons": changes}
@@ -896,35 +943,48 @@ def _final_conclusions(
     empty = empty_breakdown(indexed["recommended"], queries)
     permission, outside = empty["permission_negative"], empty["outside_catalog"]
     measured_profile = (
-        ("Its historical vector + 0.6 results do not measure the newly advised ungated "
-        + "fallback profile.")
+        (
+            "Its historical vector + 0.6 results do not measure the newly advised ungated "
+            + "fallback profile."
+        )
         if _legacy_recommendation(recommendation)
-        else ("Results apply to the recorded configuration and do not establish "
-        + "unmeasured service profiles.")
+        else (
+            "Results apply to the recorded configuration and do not establish "
+            + "unmeasured service profiles."
+        )
     )
     return "\n\n".join(
         [
-            ("At 500 tools, the frozen nonrerank search candidate achieves "
-            + f"**{_fmt(search['accuracy']['value'], scale=100)}% versus "
-            + f"{_fmt(full['accuracy']['value'], scale=100)}%** for full loading; "
-            + f"paired change {_ci(change['accuracy'])} pp. "
-            + "The experimental rerank arm achieves "
-            + f"{_fmt(rerank['accuracy']['value'], scale=100)}%; "
-            + "it remains default-off and must be assessed separately."),
-            ("For the measured candidate, in-catalog but unauthorized queries have "
-            + f"**{permission['false_recommendations']}/{permission['n']} "
-            + f"({_fmt(permission['false_rate'], scale=100)}%)** false recommendations. "
-            + f"Outside-catalog queries have {outside['false_recommendations']}/{outside['n']} "
-            + f"across only **{outside['unique_texts']} unique texts**. "
-            + "Empty-ACL queries are trivial cases and are reported separately below."),
-            ("Current advice for a future service profile is **vector_bm25_fallback without "
-            + "cosine or margin gates**, with rerank off. Adoption confidence is low to medium; "
-            + "this preserves the lexical fallback while deferring cosine calibration until "
-            + "independent human labels exist. Rerank evidence is medium-confidence and supports a "
-            + "per-deployment controlled trial, not unconditional enablement. "
-            + "Actual serving defaults remain unchanged; switching them requires a "
-            + "**separate user-confirmed task**. The raw arm named `recommended` is the frozen "
-            + "measurement configuration, not this revised service advice. ") + measured_profile,
+            (
+                "At 500 tools, the frozen nonrerank search candidate achieves "
+                + f"**{_fmt(search['accuracy']['value'], scale=100)}% versus "
+                + f"{_fmt(full['accuracy']['value'], scale=100)}%** for full loading; "
+                + f"paired change {_ci(change['accuracy'])} pp. "
+                + "The experimental rerank arm achieves "
+                + f"{_fmt(rerank['accuracy']['value'], scale=100)}%; "
+                + "it remains default-off and must be assessed separately."
+            ),
+            (
+                "For the measured candidate, in-catalog but unauthorized queries have "
+                + f"**{permission['false_recommendations']}/{permission['n']} "
+                + f"({_fmt(permission['false_rate'], scale=100)}%)** false recommendations. "
+                + f"Outside-catalog queries have {outside['false_recommendations']}/{outside['n']} "
+                + f"across only **{outside['unique_texts']} unique texts**. "
+                + "Empty-ACL queries are trivial cases and are reported separately below."
+            ),
+            (
+                "Current advice for a future service profile is **vector_bm25_fallback without "
+                + "cosine or margin gates**, with rerank off. Adoption "
+                + "confidence is low to medium; "
+                + "this preserves the lexical fallback while deferring cosine calibration until "
+                + "independent human labels exist. Rerank evidence is "
+                + "medium-confidence and supports a "
+                + "per-deployment controlled trial, not unconditional enablement. "
+                + "Actual serving defaults remain unchanged; switching them requires a "
+                + "**separate user-confirmed task**. The raw arm named `recommended` is the frozen "
+                + "measurement configuration, not this revised service advice. "
+            )
+            + measured_profile,
         ]
     )
 
@@ -966,8 +1026,10 @@ def summarize_test(output: Path, queries: Sequence[EvalQuery]) -> None:
         "",
         rendered,
         "",
-        ("[Detailed cohorts and paired changes](test-analysis.json). "
-        + "[Frozen split](split-manifest.json). [Prior-exposure audit](split-audit.json)."),
+        (
+            "[Detailed cohorts and paired changes](test-analysis.json). "
+            + "[Frozen split](split-manifest.json). [Prior-exposure audit](split-audit.json)."
+        ),
     ]
     (output / "final-test-report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
     _write(

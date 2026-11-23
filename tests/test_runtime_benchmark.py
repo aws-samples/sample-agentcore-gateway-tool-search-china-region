@@ -37,8 +37,12 @@ class BenchmarkHarness:
         assert kwargs["shell"] is False
         if Path(command[0]).name == "git" and command[1:3] == ["rev-parse", "--verify"]:
             assert "--end-of-options" in command
+            # CompletedProcess only constructs a mock result; it starts no process.
+            # nosemgrep: dangerous-subprocess-use-audit
             return subprocess.CompletedProcess(command, 0, "a" * 40 + "\n", "")
         if Path(command[0]).name == "git" and command[1] == "show":
+            # CompletedProcess only constructs a mock result; it starts no process.
+            # nosemgrep: dangerous-subprocess-use-audit
             return subprocess.CompletedProcess(command, 0, self.baseline, "")
         assert command[-1] == "--child"
         payload = json.loads(kwargs["input"])
@@ -58,6 +62,8 @@ class BenchmarkHarness:
             "configuration_requests": 1,
             **self.overrides.get((variant, mode), {}),
         }
+        # CompletedProcess only constructs a mock result; it starts no process.
+        # nosemgrep: dangerous-subprocess-use-audit
         return subprocess.CompletedProcess(command, 0, json.dumps(row), "")
 
     def invoke(self, *arguments: str) -> None:

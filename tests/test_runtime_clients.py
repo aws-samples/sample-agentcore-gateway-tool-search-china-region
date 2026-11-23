@@ -98,6 +98,8 @@ print(json.dumps([name for name in ("boto3", "s3transfer") if name in sys.module
 """
     environment = offline_environment()
     environment["PYTHONPATH"] = str(ROOT / "src")
+    # Fixed local test program and fixture paths; argv is not request-controlled.
+    # nosemgrep: dangerous-subprocess-use-audit
     result = subprocess.run(  # nosec B603
         [sys.executable, "-c", code],
         cwd=ROOT,

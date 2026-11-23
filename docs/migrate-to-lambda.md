@@ -228,7 +228,7 @@ schema、credential provider 和 REQUEST 绑定，再经 Gateway 验证发现工
 synth 告警差集**逐项审核，覆盖所有可能在排空期间触发的告警，不得只照抄
 `{prefix}-ecs-running-tasks`、`{prefix}-ecs-healthy-targets`、
 `{prefix}-ecs-unhealthy-targets` 三项，也不能按名称是否含 `ecs` 筛选。
-本次配置通知主题的双 China 区域离线 synth 均新增 **30 个告警，30/30 带 `AlarmActions`**，其中仅 18 个
+启用 ECS 并配置通知主题时，北京和宁夏的模板均新增 **30 个告警，30/30 带 `AlarmActions`**，其中仅 18 个
 名称含 `ecs`；集合含 facade/fallback、TLS、worker 和后端错误等信号，定义见
 [ECS 告警](../infra/ecs_search.py)与[监控定义](../infra/monitoring.py)。
 

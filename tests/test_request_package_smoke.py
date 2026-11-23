@@ -36,6 +36,8 @@ def run_smoke(
 ) -> subprocess.CompletedProcess[str]:
     script_path = package.parent / "smoke-probe.py"
     script_path.write_text(script)
+    # Fixed local test program and fixture paths; argv is not request-controlled.
+    # nosemgrep: dangerous-subprocess-use-audit
     return subprocess.run(  # nosec B603
         [sys.executable, "-I", "-S", str(script_path), str(package)],
         cwd=ROOT,

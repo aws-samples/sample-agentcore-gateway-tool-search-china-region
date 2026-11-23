@@ -1,4 +1,4 @@
-"""Final-review regressions for cold fallback budget and invocation ownership."""
+"""Regressions for cold fallback budget and invocation ownership."""
 
 import importlib
 import json
@@ -399,10 +399,14 @@ def test_failed_initialization_keeps_safe_failed_stage_timing(monkeypatch):
 
 
 def test_timing_helper_does_not_import_httpx_before_measured_import_stage():
+    # Fixed local test program and fixture paths; argv is not request-controlled.
+    # nosemgrep: dangerous-subprocess-use-audit
     result = subprocess.run(  # nosec B603
         [
             sys.executable,
             "-c",
+            # Adjacent literals intentionally form one code snippet or ARN value.
+            # nosemgrep: string-concat-in-list
             "import sys; sys.path.insert(0, 'src'); import semantic_service.route_telemetry; "
             "assert 'httpx' not in sys.modules",
         ],

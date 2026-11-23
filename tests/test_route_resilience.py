@@ -55,6 +55,8 @@ def test_budget_source_mutations_fail_before_any_consumer_loads(name, replacemen
     # make internally inconsistent production constants valid.
     with pytest.raises(ValueError, match="routing budget"):
         # Fixed local test fixture source; never supplied by a request.
+        # Only repository source with fixed test substitutions is executed locally.
+        # nosemgrep: exec-detected
         exec(compile("\n".join(lines), str(path), "exec"), {})  # nosec B102
 
 
@@ -76,6 +78,8 @@ def test_consistent_budget_change_is_not_rejected_by_literal_pins():
             source[index] = f"{name} = {replacements[name]}"
     namespace = {}
     # Fixed local test fixture source; never supplied by a request.
+    # Only repository source with fixed test substitutions is executed locally.
+    # nosemgrep: exec-detected
     exec(compile("\n".join(source), "<consistent-budgets>", "exec"), namespace)  # nosec B102
     assert namespace["ROUTE_SECONDS"] == 16.0
 
@@ -446,6 +450,8 @@ def test_module_import_failure_logs_only_safe_original_type(monkeypatch, capsys)
     source = Path(facade.__file__).with_name("facade_lambda.py").read_text()
     with pytest.raises(RuntimeError, match="facade initialization failed"):
         # Fixed local test fixture source; never supplied by a request.
+        # Only repository source with fixed test substitutions is executed locally.
+        # nosemgrep: exec-detected
         exec(compile(source, "<entry-fixture>", "exec"), {})  # nosec B102
     output = capsys.readouterr().out
     record = json.loads(output)
@@ -495,6 +501,8 @@ def test_eager_route_zero_factory_means_no_invoke_factory_work():
 def test_http_completed_outcome_survives_transport_log_alarm(code, value, expected_error):
     calls, signals = [], []
 
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def respond(request):
         if code == 0:
             error = httpx.ConnectError("private TLS detail")

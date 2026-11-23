@@ -139,6 +139,8 @@ def log_record(capsys):
 
 
 def test_log_guard_rejects_stderr_leak_from_real_search_call(monkeypatch, capsys):
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def leaky_transport(request):
         print(f"private-exception-marker {request.url} {QUERY}", file=sys.stderr)
         return httpx.Response(503)
@@ -179,6 +181,8 @@ def assert_bounded_request_timeouts(requests, count=1, *, timeout=1.0):
 def test_http_failure_reaches_search_stdout_without_changing_business_response(
     status, kind, monkeypatch, capsys
 ):
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def fail(_):
         return httpx.Response(
             status,
@@ -217,6 +221,8 @@ def test_http_failure_reaches_search_stdout_without_changing_business_response(
 def test_transport_and_parse_failures_are_distinct_without_raw_details(
     failure, kind, monkeypatch, capsys
 ):
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def fail(request):
         if failure is None:
             return httpx.Response(200, content=b"private-body-marker not JSON")
@@ -254,6 +260,8 @@ def test_transport_and_parse_failures_are_distinct_without_raw_details(
     ],
 )
 def test_retry_after_only_accepts_bounded_ascii_integer(value, expected, monkeypatch, capsys):
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def fail(_):
         return httpx.Response(429, headers=[(b"Retry-After", value.encode("utf-8"))])
 
@@ -470,6 +478,8 @@ def test_all_shared_http_consumers_preserve_failure_and_error_code(
 ):
     calls = []
 
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def fail(request):
         calls.append(request)
         return httpx.Response(
@@ -511,6 +521,8 @@ def test_response_validation_wrappers_keep_failure_and_usage(kind, status, malfo
         payload["model"] = "wrong-model"
     calls = []
 
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def rejected_response(request):
         calls.append(request)
         return httpx.Response(status, json=payload)
@@ -536,6 +548,8 @@ def test_invalid_usage_keeps_valid_counters_and_actual_response_status(kind, sta
     payload = {"usage": {"total_tokens": 17, "input_tokens": -1}}
     calls = []
 
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def invalid_usage(request):
         calls.append(request)
         return httpx.Response(status, json=payload)
@@ -554,6 +568,8 @@ def test_invalid_usage_keeps_valid_counters_and_actual_response_status(kind, sta
 def test_chat_repair_then_http_failure_keeps_first_usage_and_latest_failure(status):
     calls = []
 
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def fail(request):
         calls.append(request)
         if len(calls) == 1:
@@ -583,6 +599,8 @@ def test_chat_repair_then_http_failure_keeps_first_usage_and_latest_failure(stat
 def test_chat_repair_then_network_failure_does_not_inherit_previous_http_status():
     calls = []
 
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def failed_second_attempt(request):
         calls.append(request)
         if len(calls) == 1:
@@ -639,6 +657,8 @@ def test_deadline_failure_is_not_mislabeled_as_a_network_timeout(monkeypatch):
     clock = [100.0]
     monkeypatch.setattr("semantic_core._http.time.monotonic", lambda: clock[0])
 
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def late(_):
         clock[0] += 0.46
         return success()
@@ -681,6 +701,8 @@ def test_actual_search_request_uses_default_one_second_embedding_budget(monkeypa
 
 
 def test_bad_gzip_response_is_parse_failure_in_search_log(monkeypatch, capsys):
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def corrupt(_):
         return httpx.Response(
             200,
@@ -702,6 +724,8 @@ def test_bad_gzip_response_is_parse_failure_in_search_log(monkeypatch, capsys):
 def test_bad_gzip_response_keeps_original_unavailable_error_code():
     calls = []
 
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def corrupt(request):
         calls.append(request)
         return httpx.Response(
@@ -738,6 +762,8 @@ def test_provider_error_rejects_invalid_failure_with_fixed_safe_message(invalid)
 
 
 def test_unknown_exception_is_bounded_and_keeps_bm25(monkeypatch, capsys):
+    # Callback is passed to the local mock transport below; it is not unused.
+    # nosemgrep: useless-inner-function
     def broken(_):
         raise RuntimeError("private-exception-marker private-key-marker")
 

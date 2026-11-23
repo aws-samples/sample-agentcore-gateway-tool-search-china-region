@@ -9,9 +9,8 @@ import math
 ROUTE_SECONDS = 14.0
 ECS_SECONDS = 4.0
 FALLBACK_SECONDS = 10.0
-# Engineering allowance: independent review's archived summary reports 229 old
-# Search cold samples with Init + REPORT <= 4.25437 s (our raw subset: 7 samples,
-# <= 4.12342 s). New-wrapper/Invoke margin remains unverified, not a percentile SLO.
+# Reserve enough of the route window to attempt Lambda fallback, including cold
+# initialization and invocation overhead. This allowance is not a latency SLO.
 FALLBACK_RESERVE_SECONDS = 8.0
 FACADE_TIMEOUT_SECONDS = 15
 FALLBACK_TIMEOUT_SECONDS = 11

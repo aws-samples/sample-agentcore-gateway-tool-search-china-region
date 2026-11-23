@@ -179,6 +179,8 @@ wall_ms = (time.perf_counter() - started) * 1000
 print(json.dumps({{'entry_ms': entry._ENTRY_IMPORT_MS, 'wall_ms': wall_ms}}))
 """
     for preimport in ("", "import semantic_service.runtime\n"):
+        # Fixed local test program and fixture paths; argv is not request-controlled.
+        # nosemgrep: dangerous-subprocess-use-audit
         result = subprocess.run(  # nosec B603
             [sys.executable, "-c", preimport + code],
             env={
@@ -380,6 +382,8 @@ def test_total_init_duration_includes_prefetch_but_factory_duration_does_not(
 
 def test_pinned_configuration_failure_does_not_promise_in_process_recovery():
     script = Path(__file__).with_name("fixtures") / "request-pinned-config-init.py"
+    # Fixed local test program and fixture paths; argv is not request-controlled.
+    # nosemgrep: dangerous-subprocess-use-audit
     result = subprocess.run(  # nosec B603
         [sys.executable, "-c", script.read_text()],
         env={"PATH": os.defpath, "PYTHONPATH": str(Path(__file__).resolve().parents[1] / "src")},

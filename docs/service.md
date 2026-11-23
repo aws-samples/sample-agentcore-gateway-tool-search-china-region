@@ -100,7 +100,7 @@ metadata 或完整约束形状：根和 `query` 不带说明，`_auth_context.de
 `Server-managed signed context. Clients must omit this field.`，缺失、改写或增加说明均拒绝。
 客户端可见的 schema 因此较宽松，不能依赖 `tools/list` 的长度关键字做前置校验；
 服务端仍检查全部限制。不得为补回客户端约束而修改配置中的实际回读 schema，否则摘要
-不匹配会拒绝授权；改变 Gateway 工具定义需另行授权，不属于本次本地修复。
+不匹配会拒绝授权；改变 Gateway 工具定义需另行授权。
 可选 `_auth_context` 由入口删除客户端值后覆盖。不要让客户端填写身份信息。
 运行时强制非空白query、最多2048 Unicode字符、封套最多8192字符，拒绝未知参数；
 HMAC验签、当前ACL及工具名、Gateway、target和MCP request ID绑定仍为必检项。
@@ -341,7 +341,7 @@ filters 使用以下字段，不增加日志目的地，也不改变 Gateway 的
 
 `search-lambda-deadline-ignored` 匹配 `operation=search` 且
 `lambda_deadline_ignored=true` 的日志，每条固定计数 `1`，包括最终 `status=ok`
-的请求。过滤器须部署相应 CDK 后生效；本次不新增告警阈值。
+的请求。过滤器须部署相应 CDK 后生效；当前未配置该指标的告警阈值。
 
 诊断中的 `ranking_mode` 指本请求最近完成的排名：授权集合在排名前已为空时为
 `null`；排名完成后再全部撤权，保留最近完成的模式。它与 `SearchResult` 中为兼容

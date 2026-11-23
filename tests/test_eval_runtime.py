@@ -12,6 +12,8 @@ SECRET = {"base_url": "https://offline.example/tenant/v1", "api_key": "fixture-k
 
 
 def completed(payload: object, returncode: int = 0) -> subprocess.CompletedProcess[str]:
+    # CompletedProcess only constructs a mock result; it starts no process.
+    # nosemgrep: dangerous-subprocess-use-audit
     return subprocess.CompletedProcess(
         args=["aws"],
         returncode=returncode,

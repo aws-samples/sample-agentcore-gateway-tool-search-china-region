@@ -9,6 +9,3 @@
 /dist/
 /build/
 /*.egg-info/
-# Local regression subset only. Nested product directories remain in scope.
-# Root tests use the explicitly scoped Bandit test policy.
-/tests/
