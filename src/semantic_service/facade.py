@@ -466,7 +466,7 @@ def _has_tls_cause(error: BaseException) -> bool:
     return False
 
 
-def _oauth_failure(
+def _exchange_failure(
     error: BaseException, *, rejected: bool, server_failed: bool, deadline: bool = False
 ) -> tuple[str, str | None]:
     """Classify typed causes, preserving explicit rejection over compensating I/O."""
@@ -604,8 +604,9 @@ class HTTPBackend:
         client = cast(httpx.Client, self.client)
         tokens = cast(OAuthTokenSource, self.tokens)
         oauth_started = time.monotonic()
-        oauth_status = "started"
-        oauth_timings: dict[str, dict[str, float | int]] = {}
+        # These diagnostics contain only code-owned labels and numeric counters.
+        exchange_status = "started"
+        exchange_timings: dict[str, dict[str, float | int]] = {}
         oauth_rejected = False
         oauth_server_failed = False
         transport_reason: str | None = None
@@ -621,8 +622,8 @@ class HTTPBackend:
                     "timestamp_ms": int(time.time() * 1000),
                     "duration_ms": round((time.monotonic() - oauth_started) * 1000, 3),
                     "remaining_ms": round(max(0.0, deadline - time.monotonic()) * 1000, 3),
-                    "status": oauth_status,
-                    "stage_timings": oauth_timings,
+                    "status": exchange_status,
+                    "stage_timings": exchange_timings,
                     "transport_reason": transport_reason,
                 }
             )
@@ -638,16 +639,16 @@ class HTTPBackend:
                             RequestContext(cast(str, body["attempt_id"]), deadline)
                         )
                     finally:
-                        oauth_timings = measured.snapshot()
+                        exchange_timings = measured.snapshot()
                         oauth_rejected = measured.oauth_rejected
                         oauth_server_failed = measured.oauth_server_failed
                 if time.monotonic() >= deadline:
                     raise DeadlineExpired()
-                oauth_status = "ok"
+                exchange_status = "ok"
             except (DeadlineExpired, _CatalogDeadlineExceeded) as error:
                 # A diagnostic/cleanup deadline may mask an earlier rejection or
                 # TLS error in its context; it must not authorize fallback.
-                oauth_status, transport_reason = _oauth_failure(
+                exchange_status, transport_reason = _exchange_failure(
                     error,
                     rejected=oauth_rejected or (measured is not None and measured.oauth_rejected),
                     server_failed=(
@@ -660,7 +661,7 @@ class HTTPBackend:
                     raise ServiceError() from None
                 raise TransportUnavailable(transport_reason) from None
             except Exception as error:
-                oauth_status, transport_reason = _oauth_failure(
+                exchange_status, transport_reason = _exchange_failure(
                     error,
                     rejected=oauth_rejected or (measured is not None and measured.oauth_rejected),
                     server_failed=(
@@ -677,7 +678,7 @@ class HTTPBackend:
             # The terminal telemetry callback still runs inside the attempt
             # timer. Its late signal cannot replace a classified rejection or
             # overwrite the cause of an already classified transport failure.
-            if oauth_status in {
+            if exchange_status in {
                 "oauth_rejected",
                 "oauth_tls_failed",
                 "oauth_server_failed",
