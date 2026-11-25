@@ -40,7 +40,10 @@
     "oauth": {"suffix": "AbCd03"}
   },
   "model_settings": {
-    "MODEL_ALLOWED_HOSTS": "model.example.invalid",
+    "MODEL_ALLOWED_HOSTS": "models.example.com",
+    "MODEL_EMBEDDING_MODEL": "example-embedding-model",
+    "MODEL_CHAT_MODEL": "example-chat-model",
+    "MODEL_RERANK_MODEL": "example-rerank-model",
     "MODEL_EMBEDDING_DIMENSIONS": "1024",
     "MODEL_EMBEDDING_MAX_BATCH": "10",
     "MODEL_RERANK_ENABLED": "false",

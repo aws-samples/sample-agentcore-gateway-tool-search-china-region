@@ -80,7 +80,7 @@ def test_unknown_version_metadata_does_not_break_standard_embedding_response():
     assert result.usage == {"total_tokens": 2}
 
 
-def test_generic_resource_limits_are_not_bound_to_legacy_bailian_ceilings():
+def test_generic_resource_limits_are_not_bound_to_legacy_configured_ceilings():
     config = HTTPConfig(
         "https://model.example",
         ("model.example",),

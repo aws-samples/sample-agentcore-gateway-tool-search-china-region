@@ -352,7 +352,13 @@ def test_rotating_provider_only_keeps_existing_authentication_refresh(first_stat
 
     secrets = SyntheticSecrets()
     settings = ModelSettings.from_env(
-        {"MODEL_ALLOWED_HOSTS": HOST, "MODEL_EMBEDDING_DIMENSIONS": "2"}
+        {
+            "MODEL_ALLOWED_HOSTS": HOST,
+            "MODEL_EMBEDDING_MODEL": "example-embedding-model",
+            "MODEL_CHAT_MODEL": "example-chat-model",
+            "MODEL_RERANK_MODEL": "example-rerank-model",
+            "MODEL_EMBEDDING_DIMENSIONS": "2",
+        }
     )
     with httpx.Client(transport=httpx.MockTransport(fail), trust_env=False) as client:
         provider = RotatingModelProviders(SecretsCache(secrets), settings, client)
@@ -394,6 +400,8 @@ def test_rotation_refresh_failure_retains_authentication_in_real_search_log(
     settings = ModelSettings.from_env(
         {
             "MODEL_ALLOWED_HOSTS": HOST,
+            "MODEL_CHAT_MODEL": "example-chat-model",
+            "MODEL_RERANK_MODEL": "example-rerank-model",
             "MODEL_EMBEDDING_MODEL": PROFILE.model_id,
             "MODEL_EMBEDDING_REVISION": PROFILE.revision,
             "MODEL_EMBEDDING_DIMENSIONS": "2",

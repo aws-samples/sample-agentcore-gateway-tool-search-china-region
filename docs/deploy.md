@@ -83,7 +83,7 @@ Gateway identity是长期身份，变更可能替换资源，必须先检查 cha
    endpoint、非对称算法、claim 映射、机器 scopes和主体。公网可达前提仍需
    Gateway 服务侧验证；中国区不用 Cognito User Pool或 private IdP configuration。
 5. Secrets管理员在同账号/区域准备三个不同的 secret，交付精确名称和实际 ARN后缀，
-   以及可选客户 KMS key ID。CDK只引用名称/ARN，不创建、获取或保存值。默认模型名
+   以及可选客户 KMS key ID。CDK只引用名称/ARN，不创建、获取或保存值。模型凭证 secret 的默认名称
    `semsearch/model-api`；signing与OAuth分别独立。内容结构见下表。
    另外准备已有、开启versioning的配置bucket，可使用已批准的CDK bootstrap artifact
    bucket；其名称通过`ConfigurationBucketName`参数传入，CDK不会创建或修改该外部bucket。
@@ -235,7 +235,7 @@ synth，不能部署。CLI通过`-c config=...`选定文件，`-c stage=...`、`
 | Gateway绑定 | `gateway_id`、`gateway_url`、`gateway_allowed_hosts`、`gateway_execution_role_name`、`search_target_id`、`search_incarnation`、`search_descriptor`、`registry` |
 | IdP/机器身份 | `oidc`映射中的issuer/audience/discovery/JWKS/token endpoint、精确host allowlist、算法/claims、机器scopes；`machine_principals`为issuer/subject数组 |
 | Secrets引用 | `secrets.model/signing/oauth`各含实际6字符`suffix`、可选`name`与精确`kms_key_id`；默认名称分别为`semsearch/model-api`、`semsearch/signing`、`semsearch/indexer-oauth` |
-| 检索与模型 | `service_settings`/`model_settings`为允许的运行时配置映射；`models_enabled=false`；服务默认`vector_bm25_fallback`，两项拒答门槛省略、rerank关闭；当前代理显式维度1024、batch10，host单独登记 |
+| 检索与模型 | `service_settings`/`model_settings`为允许的运行时配置映射；`models_enabled=false`；服务默认`vector_bm25_fallback`，两项拒答门槛省略、rerank关闭；`models_enabled=true` 时必须提供 `MODEL_EMBEDDING_MODEL`、`MODEL_CHAT_MODEL`；启用重排还需 `MODEL_RERANK_MODEL`。示例维度 1024、batch 10，须按模型验证，host 单独登记 |
 | 调度 | `schedules_enabled=false`；固定60s/300s频率，固定0 retry/60s max age |
 | REQUEST 打包与预置并发 | `request_package="shared"` 默认共享包；`"request"` 持久选择独立包；`request_provisioned_concurrency=0` 默认关闭，仅在独立包模式允许正整数 |
 | 可观测性 | `log_retention_days=30`，允许7/14/30/60/90/180/365；`alarm_topic_arns`可引用同账号同Region已有SNS topic；默认无消息动作 |
@@ -278,7 +278,7 @@ Indexer配置`SEMSEARCH_MCP_VERSIONS=2025-03-26`，保留协商allowlist。所�
 Indexer机器请求使用字符串JSON-RPC ID；numeric、null和boolean均拒绝，
 通知仍不带ID。Search封套进一步要求ID非空且最多256字符。
 不得把数值ID转换为字符串来绕过签名的精确绑定。
-当前代理base已含`/v1`，可登记经测试的`MODEL_RERANK_PATH=/rerank`、
+若模型服务的 base URL 含 `/v1` 且已验证下列路由，可登记`MODEL_RERANK_PATH=/rerank`、
 `MODEL_RERANK_ENVELOPE=flat`、`MODEL_RERANK_SCORE_FIELD=relevance_score`，
 并保持`MODEL_RERANK_ENABLED=false`。不要重复拼接`/v1`或从模型名推断其它路由；
 维度变更须重建索引。早期 450ms 预算的本地少量样本出现超时，不能单凭该探针决定预算。

@@ -60,7 +60,7 @@ flowchart TB
     Secrets -.-> Search
     Secrets -.-> Indexer
     Secrets -.-> Enhancer
-    Search -->|"查询与可选授权候选"| Model["受控模型代理 → 百炼"]
+    Search -->|"查询与可选授权候选"| Model["受控模型代理 → 模型服务"]
     Enhancer -->|"工具摘要与已批准示例"| Model
 ```
 
@@ -81,7 +81,7 @@ sequenceDiagram
     participant D as 当前授权视图
     participant S as Search Lambda
     participant B as S3 快照
-    participant M as 模型代理 / 百炼
+    participant M as 模型代理 / 模型服务
     A->>I: 按客户认证流程获取短期访问令牌
     I-->>A: JWT
     A->>G: tools/call，query，字符串 id
@@ -142,7 +142,7 @@ sequenceDiagram
     participant H as Enhancer
     participant D as state / protected
     participant B as S3
-    participant M as 模型代理 / 百炼
+    participant M as 模型代理 / 模型服务
     P->>G: 更新工具；需要同步时同步并等待 READY
     T->>X: 每分钟触发
     X->>D: 读取当前控制视图及删除状态
@@ -211,10 +211,11 @@ flowchart TB
             end
         end
     end
-    subgraph External["AWS 外部依赖边界"]
+    subgraph External["独立服务边界：远程或自建"]
+        direction TB
         IDP["客户 IdP<br/>实际托管位置按客户登记"]
         Proxy["受控模型代理"]
-        Bailian["百炼模型<br/>实际处理地域与保留条款未核实"]
+        ModelService["兼容 OpenAI 接口的模型服务<br/>实际处理地域与保留条款未核实"]
     end
     Client -->|"JWT + MCP"| GW
     Client -->|"客户认证流程"| IDP
@@ -227,7 +228,7 @@ flowchart TB
     F --> CW
     F -->|"OIDC 元数据；Indexer OAuth 认证"| IDP
     F -->|"查询、工具摘要、已批准示例"| Proxy
-    Proxy --> Bailian
+    Proxy --> ModelService
 ```
 
 | 边界 | 当前实现 | 客户需要确认什么 |

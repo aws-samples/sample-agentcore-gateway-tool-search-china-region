@@ -45,7 +45,7 @@ def data() -> Dataset:
     "malformation",
     ["identity", "envelope", "length", "object", "index", "score", "duplicate", "order"],
 )
-@pytest.mark.parametrize("envelope", ["flat", "bailian-native"])
+@pytest.mark.parametrize("envelope", ["flat", "nested-output"])
 def test_rerank_all_response_failures_keep_usage_and_stop_at_budget(
     malformation: str, envelope: str
 ) -> None:
@@ -69,7 +69,7 @@ def test_rerank_all_response_failures_keep_usage_and_stop_at_budget(
     payload = {
         "model": "wrong-model" if malformation == "identity" else "fixture-reranker",
         "usage": {"prompt_tokens": 17, "total_tokens": 17},
-        **({"output": result_body} if envelope == "bailian-native" else result_body),
+        **({"output": result_body} if envelope == "nested-output" else result_body),
     }
     attempts = []
 

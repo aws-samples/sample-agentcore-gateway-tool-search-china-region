@@ -51,12 +51,12 @@ def test_trial_examples_parse_offline_with_current_proxy_route_and_stage_budgets
     arm = "on" if enabled else "off"
     config = DeploymentConfig.from_file(ROOT / f"examples/rerank-{arm}.dev.json")
     model = ModelSettings.from_env(config.model_settings)
-    assert model.base_url == "https://model.example.invalid/v1"
-    assert model.allowed_hosts == ("model.example.invalid",)
+    assert model.base_url == "https://models.example.com/v1"
+    assert model.allowed_hosts == ("models.example.com",)
     assert model.embedding.path == "/embeddings"
     assert model.embedding_timeout_seconds == 1.0
     assert model.rerank_timeout_seconds == 0.45
-    assert config.model_settings["MODEL_RERANK_MODEL"] == "qwen3-rerank"
+    assert config.model_settings["MODEL_RERANK_MODEL"] == "example-rerank-model"
     assert config.model_settings["MODEL_RERANK_PATH"] == "/rerank"
     assert config.model_settings["MODEL_RERANK_ENVELOPE"] == "flat"
     assert config.model_settings["MODEL_RERANK_SCORE_FIELD"] == "relevance_score"

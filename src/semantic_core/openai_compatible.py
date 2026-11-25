@@ -2,7 +2,7 @@
 
 Transport, authentication, model profiles and supported request fields are
 explicit caller configuration. No client, credential discovery or network access
-is created here. Vendor presets are ordinary immutable configuration values.
+is created here. Model identities must be supplied explicitly.
 """
 
 from __future__ import annotations
@@ -49,8 +49,8 @@ __all__ = [
     "ChatConfig",
     "OpenAIEmbeddingProvider",
     "OpenAIChatProvider",
-    "bailian_embedding_config",
-    "bailian_chat_config",
+    "openai_embedding_config",
+    "openai_chat_config",
 ]
 
 _RESERVED_BODY_FIELDS = {
@@ -261,7 +261,7 @@ class OpenAIChatProvider(_HTTPProvider):
         response: Mapping[str, object] | None = None
         try:
             for attempt in range(2):
-                # 新尝试未收到响应时，不能继承上一轮 schema repair 的成功状态。
+                # A new attempt must not inherit the previous schema repair response.
                 response = None
                 response = self._post(config.path, payload, context)
                 # Record validated provider counters before response validation.
@@ -293,26 +293,29 @@ class OpenAIChatProvider(_HTTPProvider):
         raise AssertionError("bounded retry exhausted")
 
 
-def bailian_embedding_config(revision: str, config_version: str = "v1") -> EmbeddingConfig:
+def openai_embedding_config(
+    revision: str,
+    config_version: str = "v1",
+    *,
+    model_id: str,
+    dimension: int = 1024,
+) -> EmbeddingConfig:
+    """Configure the standard embedding route for an explicitly selected model."""
     return EmbeddingConfig(
-        profile=ModelProfile("text-embedding-v4", revision, 1024, config_version=config_version),
-        path="/compatible-mode/v1/embeddings",
+        profile=ModelProfile(model_id, revision, dimension, config_version=config_version),
+        path="/v1/embeddings",
         max_batch=10,
         max_text_bytes=8192,
         origin_only=True,
     )
 
 
-def bailian_chat_config(config_version: str = "v1") -> ChatConfig:
+def openai_chat_config(config_version: str = "v1", *, model_id: str, revision: str) -> ChatConfig:
+    """Configure the standard chat route without service-specific request fields."""
     return ChatConfig(
-        profile=ModelProfile(
-            "qwen-plus-2025-12-01",
-            "qwen-plus-2025-12-01",
-            config_version=config_version,
-        ),
-        path="/compatible-mode/v1/chat/completions",
+        profile=ModelProfile(model_id, revision, config_version=config_version),
+        path="/v1/chat/completions",
         max_text_bytes=8192,
-        extra_body={"enable_thinking": False},
         origin_only=True,
     )
 

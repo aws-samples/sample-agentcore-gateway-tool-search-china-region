@@ -10,6 +10,8 @@ Confidence intervals describe variation in the supplied synthetic query sample; 
 
 ## Run metadata
 
+The model identity is not disclosed.
+
 ```json
 {
   "ci_scope": "query bootstrap, conditional on this synthetic corpus; no real-world quality claim",
@@ -18,7 +20,7 @@ Confidence intervals describe variation in the supplied synthetic query sample; 
   "embedding_profile": {
     "config_version": "v1",
     "dimension": 1024,
-    "model_id": "text-embedding-v4",
+    "model_id": "withheld",
     "normalization": "l2",
     "revision": "configured-eval-v1"
   },

@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import sys
+from functools import partial
 from pathlib import Path
 from types import ModuleType
 
@@ -12,7 +13,18 @@ import pytest
 
 from semantic_core.providers import MockEmbeddingProvider, MockRerankProvider
 from semantic_eval.dataset import generate_dataset
-from semantic_eval.tuning_runtime import Ledger, RunStopped
+from semantic_eval.tuning_runtime import Ledger as RuntimeLedger
+from semantic_eval.tuning_runtime import RunStopped
+
+Ledger = partial(
+    RuntimeLedger,
+    models={
+        "embedding": "example-embedding-model",
+        "rerank": "example-rerank-model",
+        "chat": "example-chat-model",
+    },
+    prices={"embedding": (0.5, 0.0), "rerank": (0.5, 0.0), "chat": (0.8, 2.0)},
+)
 
 
 @pytest.fixture
@@ -44,7 +56,10 @@ def test_dev_refuses_test_claim_before_preflight_or_model_work(
             tmp_path,
             budget,
         )
-    assert sorted(path.name for path in tmp_path.iterdir()) == ["test-claim.json"]
+    assert sorted(path.name for path in tmp_path.iterdir()) == [
+        "accounting-config.json",
+        "test-claim.json",
+    ]
 
 
 @pytest.mark.parametrize("default_directory", [False, True])

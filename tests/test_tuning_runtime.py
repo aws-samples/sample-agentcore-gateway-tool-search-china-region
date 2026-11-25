@@ -2,6 +2,7 @@
 
 import json
 import time
+from functools import partial
 from pathlib import Path
 
 import httpx
@@ -17,11 +18,23 @@ from semantic_core.providers import (
 )
 from semantic_eval.tuning_runtime import (
     DocumentCache,
-    Ledger,
     RunStopped,
     claim_test,
     file_sha256,
     save_json,
+)
+from semantic_eval.tuning_runtime import (
+    Ledger as RuntimeLedger,
+)
+
+Ledger = partial(
+    RuntimeLedger,
+    models={
+        "embedding": "example-embedding-model",
+        "rerank": "example-rerank-model",
+        "chat": "example-chat-model",
+    },
+    prices={"embedding": (0.5, 0.0), "rerank": (0.5, 0.0), "chat": (0.8, 2.0)},
 )
 
 
@@ -192,14 +205,22 @@ def test_http_error_attempt_is_persisted_and_budget_stops_next_transport_call(
         provider = _HTTPProvider(
             client,
             HTTPConfig("https://fixture.invalid", ("fixture.invalid",)),
-            ModelProfile("text-embedding-v4", "fixture", 2),
+            ModelProfile("example-embedding-model", "fixture", 2),
         )
         context = RequestContext("budget-test", time.monotonic() + 10)
         with ledger.observe():
             with pytest.raises(ProviderError):
-                provider._post("/embeddings", {"input": ["synthetic"]}, context)
+                provider._post(
+                    "/embeddings",
+                    {"model": "example-embedding-model", "input": ["synthetic"]},
+                    context,
+                )
             with pytest.raises(RunStopped, match="budget"):
-                provider._post("/embeddings", {"input": ["synthetic"]}, context)
+                provider._post(
+                    "/embeddings",
+                    {"model": "example-embedding-model", "input": ["synthetic"]},
+                    context,
+                )
     assert len(sent) == 1
     resumed = Ledger(tmp_path)
     assert resumed.counts()["embedding"] == 1
@@ -218,3 +239,45 @@ def test_corrupt_cache_vectors_are_rejected_without_query_or_document_reuse(
     np.save(next(tmp_path.glob("*.npy")), np.array([float("nan")] * 16), allow_pickle=False)
     with pytest.raises(ProviderError):
         cache.embed(["synthetic document"], "document", context)
+
+
+def test_ledger_requires_models_and_never_invents_prices(tmp_path):
+    with pytest.raises(TypeError, match="models"):
+        RuntimeLedger(tmp_path)
+    models = {
+        "embedding": "self-hosted-embed",
+        "chat": "self-hosted-chat",
+        "rerank": "self-hosted-rank",
+    }
+    ledger = RuntimeLedger(tmp_path, models=models)
+    row = ledger.start("embedding", 1)
+    ledger.finish(row, {"usage": {"total_tokens": 100}}, 1)
+    summary = ledger.summary()
+    assert row["model"] == models["embedding"]
+    assert summary["public_list_price_cny"] is None
+    assert summary["unknown_cost_requests"] == 1
+    with pytest.raises(RunStopped, match="persisted accounting configuration"):
+        RuntimeLedger(tmp_path, models={**models, "embedding": "different-model"})
+
+
+@pytest.mark.parametrize("nested", [False, True])
+def test_ledger_binds_rerank_attempts_to_configured_model(tmp_path, nested):
+    ledger = Ledger(tmp_path)
+    inputs = {"query": "fixture", "documents": ["one", "two"]}
+    payload = {"model": "example-rerank-model", **({"input": inputs} if nested else inputs)}
+    request = httpx.Request("POST", "https://models.example.com/v1/rerank", json=payload)
+    ledger.request(request)
+    row = request.extensions["tuning_row"]
+    assert row["kind"] == "rerank"
+    assert row["input_count"] == 2
+    assert row["model"] == "example-rerank-model"
+    with pytest.raises(RunStopped, match="accounting model"):
+        ledger.request(httpx.Request("POST", request.url, json={**payload, "model": "unexpected"}))
+    assert ledger.counts()["rerank"] == 1
+
+
+@pytest.mark.parametrize("rates", [[True, 1], [-1, 1], [float("inf"), 0], [1], "0.5"])
+def test_invalid_configured_prices_fail_before_persisting(tmp_path, rates):
+    with pytest.raises(ValueError, match="prices require"):
+        Ledger(tmp_path, prices={"embedding": rates})
+    assert not list(tmp_path.iterdir())

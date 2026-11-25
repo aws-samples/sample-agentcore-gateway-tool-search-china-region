@@ -14,6 +14,8 @@ Accuracy is the fraction of all attempted queries selecting an annotated authori
 
 The search-first arm is configured for RRF. Search modes show the actual query counts, including any BM25 fallback; full-load rows are not_applicable. JSON observations retain selected, expected and candidate tool IDs so accuracy can be independently recomputed.
 
+The model identity is not disclosed.
+
 ```json
 {
   "queries_actual_per_size": 30,
@@ -21,7 +23,7 @@ The search-first arm is configured for RRF. Search modes show the actual query c
   "seed": 20261010,
   "selector_profile": {
     "max_tokens": 256,
-    "model_id": "qwen-plus",
+    "model_id": "withheld",
     "revision": "configured-eval-v1",
     "temperature": 0
   }

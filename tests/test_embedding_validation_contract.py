@@ -24,6 +24,9 @@ ERROR = (
 def model_values():
     return {
         "MODEL_ALLOWED_HOSTS": "validation-model.invalid",
+        "MODEL_EMBEDDING_MODEL": "example-embedding-model",
+        "MODEL_CHAT_MODEL": "example-chat-model",
+        "MODEL_RERANK_MODEL": "example-rerank-model",
         "MODEL_EMBEDDING_DIMENSIONS": "2",
     }
 

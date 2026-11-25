@@ -15,6 +15,15 @@ from semantic_eval.selection import MockSelector
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "run_evaluation.py"
 
+MODEL_ARGUMENTS = [
+    "--embedding-model",
+    "example-embedding-model",
+    "--chat-model",
+    "example-chat-model",
+    "--rerank-model",
+    "example-rerank-model",
+]
+
 
 @pytest.fixture
 def cli() -> ModuleType:
@@ -32,6 +41,29 @@ def data() -> Dataset:
 
 def unavailable(*args, **kwargs):
     pytest.fail("credentials and HTTP must not be touched")
+
+
+def test_invalid_chat_config_refuses_before_credentials_or_evaluation(
+    cli: ModuleType, data: Dataset, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    calls = prepare(cli, data, monkeypatch)
+    monkeypatch.setenv("SEMANTIC_EVAL_REAL", "1")
+    with pytest.raises(ValueError):
+        cli.main(
+            [
+                *MODEL_ARGUMENTS,
+                "--mode",
+                "real",
+                "--allow-host",
+                "offline.example",
+                "--chat-max-tokens",
+                "0",
+                "--output-dir",
+                str(tmp_path),
+            ]
+        )
+    assert not calls
+    assert not list(tmp_path.iterdir())
 
 
 def test_default_embedding_batch_stays_within_observed_proxy_limit(cli: ModuleType) -> None:
@@ -81,6 +113,7 @@ def test_full_fixture_rerank_exceeds_default_budget_before_credentials(
     with pytest.raises(SystemExit, match="call budget"):
         cli.main(
             [
+                *MODEL_ARGUMENTS,
                 "--mode",
                 "real",
                 "--allow-host",
@@ -197,7 +230,7 @@ def test_real_mode_requires_both_switches_before_aws_or_http(
     prepare(cli, data, monkeypatch)
     monkeypatch.delenv("SEMANTIC_EVAL_REAL", raising=False)
     with pytest.raises(SystemExit, match="SEMANTIC_EVAL_REAL"):
-        cli.main(["--mode", "real", "--output-dir", str(tmp_path)])
+        cli.main([*MODEL_ARGUMENTS, "--mode", "real", "--output-dir", str(tmp_path)])
     assert not list(tmp_path.iterdir())
 
 
@@ -221,7 +254,7 @@ def test_invalid_real_request_stops_before_credentials(
     prepare(cli, data, monkeypatch)
     monkeypatch.setenv("SEMANTIC_EVAL_REAL", "1")
     with pytest.raises(SystemExit, match=message):
-        cli.main(["--mode", "real", "--output-dir", str(tmp_path), *arguments])
+        cli.main([*MODEL_ARGUMENTS, "--mode", "real", "--output-dir", str(tmp_path), *arguments])
     assert not list(tmp_path.iterdir())
 
 
@@ -233,7 +266,17 @@ def test_caller_cannot_increase_hard_real_call_budget(
     prepare(cli, data, monkeypatch)
     monkeypatch.setenv("SEMANTIC_EVAL_REAL", "1")
     with pytest.raises(ValueError, match="1..2000"):
-        cli.main(["--mode", "real", "--allow-host", "offline.example", "--max-model-calls", "2001"])
+        cli.main(
+            [
+                *MODEL_ARGUMENTS,
+                "--mode",
+                "real",
+                "--allow-host",
+                "offline.example",
+                "--max-model-calls",
+                "2001",
+            ]
+        )
 
 
 def test_unavailable_prerequisites_create_only_safe_skipped_reports(
@@ -252,7 +295,15 @@ def test_unavailable_prerequisites_create_only_safe_skipped_reports(
     monkeypatch.setattr(cli, "load_credentials", failed)
     assert (
         cli.main(
-            ["--mode", "real", "--allow-host", "offline.example", "--output-dir", str(tmp_path)]
+            [
+                *MODEL_ARGUMENTS,
+                "--mode",
+                "real",
+                "--allow-host",
+                "offline.example",
+                "--output-dir",
+                str(tmp_path),
+            ]
         )
         == 0
     )
@@ -301,6 +352,7 @@ def test_real_wiring_uses_explicit_transport_and_default_stratified_query_limit(
     monkeypatch.setattr(cli, "HTTPRerankProvider", provider("rerank"))
     monkeypatch.setattr(cli, "OpenAISelector", provider("selection"))
     arguments = [
+        *MODEL_ARGUMENTS,
         "--mode",
         "real",
         "--allow-host",
@@ -333,7 +385,7 @@ def test_real_wiring_uses_explicit_transport_and_default_stratified_query_limit(
     assert ("rerank" in providers) is rerank
     if rerank:
         assert providers["rerank"][1].codec.path == "/verified/rerank"
-        assert providers["rerank"][1].profile.model_id == "qwen3-rerank"
+        assert providers["rerank"][1].profile.model_id == "example-rerank-model"
     else:
         assert options["reranker"] is None
     knee = json.loads((tmp_path / "real-knee.json").read_text())
@@ -345,3 +397,33 @@ def test_real_wiring_uses_explicit_transport_and_default_stratified_query_limit(
         assert credentials.base_url not in path.read_text()
     captured = capsys.readouterr()
     assert credentials.api_key not in captured.out + captured.err
+
+
+@pytest.mark.parametrize("role", ["embedding", "chat", "rerank"])
+def test_real_models_are_required_before_credentials(cli, data, monkeypatch, tmp_path, role):
+    prepare(cli, data, monkeypatch)
+    monkeypatch.setenv("SEMANTIC_EVAL_REAL", "1")
+    args = [
+        "--mode",
+        "real",
+        "--allow-host",
+        "offline.example",
+        "--output-dir",
+        str(tmp_path),
+        "--enable-rerank",
+        "--rerank-path",
+        "/rerank",
+    ]
+    for selected in ("embedding", "chat", "rerank"):
+        if selected != role:
+            args.extend(["--" + selected + "-model", "example-" + selected + "-model"])
+    with pytest.raises(SystemExit, match="--" + role + "-model"):
+        cli.main(args)
+    assert not list(tmp_path.iterdir())
+
+
+def test_cli_parser_has_no_model_defaults(cli):
+    args = cli.parser().parse_args([])
+    assert args.embedding_model is None
+    assert args.chat_model is None
+    assert args.rerank_model is None

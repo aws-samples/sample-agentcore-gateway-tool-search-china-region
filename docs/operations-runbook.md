@@ -208,7 +208,7 @@ embedding 把查询或工具描述转成向量；BM25 根据词语匹配排序�
 
 | `embedding_error.kind` | 可确认的含义 | 下一步 |
 |---|---|---|
-| `http_rate_limited` | 观察到 HTTP 429 | 核对代理及模型账号共同使用量、并发和配额；不能仅凭 429 认定百炼某项额度耗尽 |
+| `http_rate_limited` | 观察到 HTTP 429 | 核对代理及模型账号共同使用量、并发和配额；不能仅凭 429 认定模型服务某项额度耗尽 |
 | `http_client_error` | 其它 HTTP 4xx，包括常规 401/403 | 查凭证状态、模型名和协议参数；保留状态码，不抄录正文 |
 | `http_server_error` | HTTP 5xx | 核对代理/模型可用性，观察持续范围 |
 | `http_status_error` | 其它非成功状态，包括未跟随的重定向 | 查批准的 endpoint 和路径 |
@@ -218,7 +218,7 @@ embedding 把查询或工具描述转成向量；BM25 根据词语匹配排序�
 | `response_parse` | JSON、响应身份、向量或结构验证失败 | 查模型响应契约、维度及配置；不能使用未验证向量 |
 | `authentication`、`rate_limited`、`invalid_request`、`unavailable`、`unknown` | provider 只提供较粗分类或未识别异常 | 核对适配器和受控诊断，不猜测上游错误正文 |
 
-完整分类、可保留的响应头和计数口径见[embedding 错误诊断](embedding-diagnostics.md)。`http_status=200` 仍可能发生解析失败或本地期限耗尽。头缺失不能排除限流；头存在也不能证明由百炼生成。
+完整分类、可保留的响应头和计数口径见[embedding 错误诊断](embedding-diagnostics.md)。`http_status=200` 仍可能发生解析失败或本地期限耗尽。头缺失不能排除限流；头存在也不能证明由模型服务生成。
 
 ### 3. 检查模型与索引是否匹配
 

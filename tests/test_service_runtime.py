@@ -150,6 +150,9 @@ def test_cold_wiring_does_not_fetch_credentials_or_contact_endpoints(monkeypatch
         "OIDC_ALLOWED_HOSTS": "idp.example.invalid",
         "OIDC_MACHINE_SCOPES": "catalog.read",
         "MODEL_ALLOWED_HOSTS": "models.example.invalid",
+        "MODEL_EMBEDDING_MODEL": "example-embedding-model",
+        "MODEL_CHAT_MODEL": "example-chat-model",
+        "MODEL_RERANK_MODEL": "example-rerank-model",
         "MODEL_EMBEDDING_DIMENSIONS": "4",
     }
     factories = [

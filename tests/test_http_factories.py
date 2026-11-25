@@ -9,11 +9,17 @@ import httpx
 import numpy as np
 import pytest
 
-from semantic_core.bailian import (
-    BailianConfig,
-    BailianEmbeddingProvider,
-    BailianLLMProvider,
-    BailianRerankProvider,
+from semantic_core.http_factories import (
+    OriginHTTPConfig,
+)
+from semantic_core.http_factories import (
+    create_chat_provider as raw_chat_provider,
+)
+from semantic_core.http_factories import (
+    create_embedding_provider as raw_embedding_provider,
+)
+from semantic_core.http_factories import (
+    create_rerank_provider as raw_rerank_provider,
 )
 from semantic_core.providers import (
     ErrorCode,
@@ -22,6 +28,23 @@ from semantic_core.providers import (
     RequestContext,
     RerankDocument,
 )
+from semantic_core.rerank import RerankCodec
+
+create_embedding_provider = partial(raw_embedding_provider, model_id="example-embedding-model")
+create_chat_provider = partial(
+    raw_chat_provider, model_id="example-chat-model-v1", revision="example-chat-model-v1"
+)
+
+
+def create_rerank_provider(client, config, *, model_id, revision, **kwargs):
+    codec = RerankCodec(
+        "/v1/rerank",
+        envelope="nested-output" if model_id == "example-nested-rerank-model" else "flat",
+    )
+    return raw_rerank_provider(
+        client, config, model_id=model_id, revision=revision, codec=codec, **kwargs
+    )
+
 
 HOST = "offline.example"
 
@@ -30,8 +53,8 @@ def context() -> RequestContext:
     return RequestContext("offline-contract", time.monotonic() + 10)
 
 
-def config() -> BailianConfig:
-    return BailianConfig(f"https://{HOST}", (HOST,))
+def config() -> OriginHTTPConfig:
+    return OriginHTTPConfig(f"https://{HOST}", (HOST,))
 
 
 def client(handler: Callable[[httpx.Request], httpx.Response]) -> httpx.Client:
@@ -40,7 +63,7 @@ def client(handler: Callable[[httpx.Request], httpx.Response]) -> httpx.Client:
 
 def embedding_payload() -> dict[str, object]:
     return {
-        "model": "text-embedding-v4",
+        "model": "example-embedding-model",
         "data": [
             {"index": 1, "embedding": [4.0] + [0.0] * 1023},
             {"index": 0, "embedding": [0.0, 3.0] + [0.0] * 1022},
@@ -59,18 +82,18 @@ def test_embedding_request_shape_input_order_and_normalization() -> None:
         return httpx.Response(200, json=embedding_payload())
 
     with client(handler) as http:
-        provider = BailianEmbeddingProvider(http, config(), revision="configured-v1")
+        provider = create_embedding_provider(http, config(), revision="configured-v1")
         result = provider.embed(["first", "second"], "document", context())
-    assert requests[0].url.path == "/compatible-mode/v1/embeddings"
+    assert requests[0].url.path == "/v1/embeddings"
     assert json.loads(requests[0].content) == {
-        "model": "text-embedding-v4",
+        "model": "example-embedding-model",
         "input": ["first", "second"],
         "dimensions": 1024,
         "encoding_format": "float",
     }
     assert requests[0].headers["x-request-id"] == "offline-contract"
     assert 0 < requests[0].extensions["timeout"]["read"] <= 1.0
-    assert result.profile == ModelProfile("text-embedding-v4", "configured-v1", 1024)
+    assert result.profile == ModelProfile("example-embedding-model", "configured-v1", 1024)
     np.testing.assert_array_equal(result.vectors[:, :2], [[0, 1], [1, 0]])
 
 
@@ -91,7 +114,7 @@ def test_embedding_malformed_output_is_rejected(mutation: Callable) -> None:
     payload = embedding_payload()
     mutation(payload)
     with client(lambda _: httpx.Response(200, json=payload)) as http:
-        provider = BailianEmbeddingProvider(http, config(), revision="configured-v1")
+        provider = create_embedding_provider(http, config(), revision="configured-v1")
         with pytest.raises(ProviderError) as error:
             provider.embed(["first", "second"], "query", context())
     assert error.value.code is ErrorCode.INVALID_RESPONSE
@@ -122,7 +145,7 @@ def test_http_errors_are_safe_and_do_not_retry(status: int, expected: ErrorCode)
         )
 
     with client(handler) as http:
-        provider = BailianEmbeddingProvider(http, config(), revision="configured-v1")
+        provider = create_embedding_provider(http, config(), revision="configured-v1")
         with pytest.raises(ProviderError) as error:
             provider.embed(["one"], "query", context())
     assert len(requests) == 1
@@ -139,7 +162,7 @@ def test_transport_errors_are_classified(failure: type[httpx.RequestError]) -> N
         raise failure("private body", request=request)
 
     with client(handler) as http:
-        provider = BailianEmbeddingProvider(http, config(), revision="configured-v1")
+        provider = create_embedding_provider(http, config(), revision="configured-v1")
         with pytest.raises(ProviderError) as error:
             provider.embed(["one"], "query", context())
     assert error.value.code is (
@@ -156,7 +179,7 @@ def test_expired_deadline_and_embedding_budget_do_not_send_requests() -> None:
         pytest.fail(f"unexpected request to {request.url.host}")
 
     with client(never) as http:
-        provider = BailianEmbeddingProvider(http, config(), revision="configured-v1")
+        provider = create_embedding_provider(http, config(), revision="configured-v1")
         for texts, ctx, code in [
             (["one"], RequestContext("expired", 0), ErrorCode.TIMEOUT),
             (["one"] * 11, context(), ErrorCode.INVALID_REQUEST),
@@ -168,9 +191,9 @@ def test_expired_deadline_and_embedding_budget_do_not_send_requests() -> None:
 
 
 def test_response_size_is_bounded_and_body_is_not_exposed() -> None:
-    small_config = BailianConfig(f"https://{HOST}", (HOST,), max_response_bytes=32)
+    small_config = OriginHTTPConfig(f"https://{HOST}", (HOST,), max_response_bytes=32)
     with client(lambda _: httpx.Response(200, text="private" * 100)) as http:
-        provider = BailianEmbeddingProvider(http, small_config, revision="configured-v1")
+        provider = create_embedding_provider(http, small_config, revision="configured-v1")
         with pytest.raises(ProviderError) as error:
             provider.embed(["one"], "query", context())
     assert error.value.code is ErrorCode.INVALID_RESPONSE
@@ -180,7 +203,7 @@ def test_response_size_is_bounded_and_body_is_not_exposed() -> None:
 @pytest.mark.parametrize("content", [b"not JSON", b'["not an object"]', b"\xff"])
 def test_invalid_http_json_is_classified(content: bytes) -> None:
     with client(lambda _: httpx.Response(200, content=content)) as http:
-        provider = BailianEmbeddingProvider(http, config(), revision="configured-v1")
+        provider = create_embedding_provider(http, config(), revision="configured-v1")
         with pytest.raises(ProviderError) as error:
             provider.embed(["one"], "query", context())
     assert error.value.code is ErrorCode.INVALID_RESPONSE
@@ -200,16 +223,18 @@ def test_invalid_http_json_is_classified(content: bytes) -> None:
 )
 def test_endpoint_must_match_exact_explicit_https_allowlist(base_url: str) -> None:
     with pytest.raises(ValueError):
-        BailianConfig(base_url, (HOST,))
+        OriginHTTPConfig(base_url, (HOST,))
 
 
-@pytest.mark.parametrize("provider_kind", ["embedding", "gte-rerank-v2", "qwen3-rerank", "llm"])
+@pytest.mark.parametrize(
+    "provider_kind", ["embedding", "example-nested-rerank-model", "example-rerank-model", "llm"]
+)
 @pytest.mark.parametrize("alias_enabled", [False, True])
 def test_response_model_aliases_are_explicit_and_preserve_profile(
     provider_kind: str, alias_enabled: bool
 ) -> None:
     alias = "fixture-approved-response"
-    settings = BailianConfig(
+    settings = OriginHTTPConfig(
         f"https://{HOST}", (HOST,), response_model_aliases=(alias,) if alias_enabled else ()
     )
     if provider_kind == "embedding":
@@ -220,20 +245,20 @@ def test_response_model_aliases_are_explicit_and_preserve_profile(
         results = [{"index": 0, "relevance_score": 0.7}]
         payload = (
             {"output": {"results": results}}
-            if provider_kind == "gte-rerank-v2"
+            if provider_kind == "example-nested-rerank-model"
             else {"results": results}
         )
     payload["model"] = alias
 
     with client(lambda _: httpx.Response(200, json=payload)) as http:
         if provider_kind == "embedding":
-            provider = BailianEmbeddingProvider(http, settings, revision="configured-v1")
+            provider = create_embedding_provider(http, settings, revision="configured-v1")
             call = partial(provider.embed, ["first", "second"], "query", context())
         elif provider_kind == "llm":
-            provider = BailianLLMProvider(http, settings)
+            provider = create_chat_provider(http, settings)
             call = partial(provider.generate_queries, "description", ("en",), 1, context())
         else:
-            provider = BailianRerankProvider(
+            provider = create_rerank_provider(
                 http, settings, model_id=provider_kind, revision="configured-v1"
             )
             call = partial(provider.rerank, "q", (RerankDocument("a", "a"),), 1, context())
@@ -264,7 +289,7 @@ def test_response_model_aliases_are_explicit_and_preserve_profile(
 )
 def test_response_model_aliases_require_an_exact_immutable_allowlist(aliases: object) -> None:
     with pytest.raises(ValueError):
-        BailianConfig(f"https://{HOST}", (HOST,), response_model_aliases=aliases)
+        OriginHTTPConfig(f"https://{HOST}", (HOST,), response_model_aliases=aliases)
 
 
 @pytest.mark.parametrize(
@@ -280,22 +305,22 @@ def test_response_model_aliases_do_not_enable_prefixes_or_relax_versions(
 ) -> None:
     payload = embedding_payload()
     payload.update(identity)
-    settings = BailianConfig(f"https://{HOST}", (HOST,), response_model_aliases=("approved-alias",))
+    settings = OriginHTTPConfig(
+        f"https://{HOST}", (HOST,), response_model_aliases=("approved-alias",)
+    )
     with client(lambda _: httpx.Response(200, json=payload)) as http:
         with pytest.raises(ProviderError) as error:
-            BailianEmbeddingProvider(http, settings, revision="configured-v1").embed(
+            create_embedding_provider(http, settings, revision="configured-v1").embed(
                 ["first", "second"], "query", context()
             )
     assert error.value.code is ErrorCode.INVALID_RESPONSE
 
 
-@pytest.mark.parametrize("model", ["gte-rerank-v2", "qwen3-rerank"])
+@pytest.mark.parametrize("model", ["example-nested-rerank-model", "example-rerank-model"])
 def test_rerank_native_and_flat_shapes(model: str) -> None:
     requests: list[httpx.Request] = []
     expected_url = f"https://{HOST}" + (
-        "/api/v1/services/rerank/text-rerank/text-rerank"
-        if model == "gte-rerank-v2"
-        else "/compatible-api/v1/reranks"
+        "/v1/rerank" if model == "example-nested-rerank-model" else "/v1/rerank"
     )
     scores = [
         {"index": 1, "relevance_score": 0.8},
@@ -310,26 +335,26 @@ def test_rerank_native_and_flat_shapes(model: str) -> None:
         requests.append(request)
         body = (
             {"output": {"results": scores}, "usage": {"total_tokens": 5}}
-            if model == "gte-rerank-v2"
+            if model == "example-nested-rerank-model"
             else {"model": model, "results": scores, "usage": {"total_tokens": 5}}
         )
         return httpx.Response(200, json=body)
 
     documents = (RerankDocument("b", "cancel"), RerankDocument("a", "order"))
     with client(handler) as http:
-        provider = BailianRerankProvider(http, config(), model_id=model, revision="v1")
+        provider = create_rerank_provider(http, config(), model_id=model, revision="v1")
         result = provider.rerank("order", documents, 2, context())
     assert [item.id for item in result.items] == ["a", "b"]
     payload = json.loads(requests[0].content)
-    if model == "gte-rerank-v2":
-        assert requests[0].url.path == "/api/v1/services/rerank/text-rerank/text-rerank"
+    if model == "example-nested-rerank-model":
+        assert requests[0].url.path == "/v1/rerank"
         assert payload == {
             "model": model,
             "input": {"query": "order", "documents": ["cancel", "order"]},
             "parameters": {"top_n": 2, "return_documents": False},
         }
     else:
-        assert requests[0].url.path == "/compatible-api/v1/reranks"
+        assert requests[0].url.path == "/v1/rerank"
         assert payload == {
             "model": model,
             "query": "order",
@@ -360,7 +385,9 @@ def test_rerank_rejects_duplicate_missing_injected_or_unsorted_results(
     scores: list[dict[str, object]],
 ) -> None:
     with client(lambda _: httpx.Response(200, json={"results": scores})) as http:
-        provider = BailianRerankProvider(http, config(), model_id="qwen3-rerank", revision="v1")
+        provider = create_rerank_provider(
+            http, config(), model_id="example-rerank-model", revision="v1"
+        )
         with pytest.raises(ProviderError) as error:
             provider.rerank("q", (RerankDocument("a", "a"), RerankDocument("b", "b")), 2, context())
     assert error.value.code is ErrorCode.INVALID_RESPONSE
@@ -372,7 +399,9 @@ def test_rerank_equal_scores_keep_original_candidate_order() -> None:
         {"index": 0, "relevance_score": 0.5},
     ]
     with client(lambda _: httpx.Response(200, json={"results": scores})) as http:
-        provider = BailianRerankProvider(http, config(), model_id="qwen3-rerank", revision="v1")
+        provider = create_rerank_provider(
+            http, config(), model_id="example-rerank-model", revision="v1"
+        )
         result = provider.rerank(
             "q", (RerankDocument("b", "b"), RerankDocument("a", "a")), 2, context()
         )
@@ -383,7 +412,9 @@ def test_rerank_equal_scores_keep_original_candidate_order() -> None:
 def test_rerank_nonfinite_and_boolean_scores_are_rejected(score: str) -> None:
     content = '{"results":[{"index":0,"relevance_score":' + score + "}]}"
     with client(lambda _: httpx.Response(200, content=content)) as http:
-        provider = BailianRerankProvider(http, config(), model_id="qwen3-rerank", revision="v1")
+        provider = create_rerank_provider(
+            http, config(), model_id="example-rerank-model", revision="v1"
+        )
         with pytest.raises(ProviderError) as error:
             provider.rerank("q", (RerankDocument("a", "a"),), 1, context())
     assert error.value.code is ErrorCode.INVALID_RESPONSE
@@ -407,7 +438,9 @@ def test_rerank_budget_checked_before_external_io(
         pytest.fail("budget failure must not send a request")
 
     with client(never) as http:
-        provider = BailianRerankProvider(http, config(), model_id="gte-rerank-v2", revision="v1")
+        provider = create_rerank_provider(
+            http, config(), model_id="example-nested-rerank-model", revision="v1"
+        )
         with pytest.raises(ProviderError) as error:
             provider.rerank(query, documents, len(documents), context())
     assert error.value.code is ErrorCode.INVALID_REQUEST
@@ -415,7 +448,7 @@ def test_rerank_budget_checked_before_external_io(
 
 def llm_payload(content: object) -> dict[str, object]:
     return {
-        "model": "qwen-plus-2025-12-01",
+        "model": "example-chat-model-v1",
         "choices": [
             {
                 "finish_reason": "stop",
@@ -465,18 +498,22 @@ def test_usage_details_and_extensions_do_not_break_valid_results(provider_kind: 
 
     with client(handler) as http:
         if provider_kind == "embedding":
-            result = BailianEmbeddingProvider(http, config(), revision="configured-v1").embed(
+            result = create_embedding_provider(http, config(), revision="configured-v1").embed(
                 ["first", "second"], "query", context()
             )
             assert result.vectors.shape == (2, 1024)
         elif provider_kind == "llm":
-            result = BailianLLMProvider(http, config()).generate_queries(
+            result = create_chat_provider(http, config()).generate_queries(
                 "description", ("en",), 1, context()
             )
             assert result.queries == ("valid query",)
         else:
-            model = "gte-rerank-v2" if provider_kind == "native-rerank" else "qwen3-rerank"
-            result = BailianRerankProvider(
+            model = (
+                "example-nested-rerank-model"
+                if provider_kind == "native-rerank"
+                else "example-rerank-model"
+            )
+            result = create_rerank_provider(
                 http, config(), model_id=model, revision="configured-v1"
             ).rerank("q", (RerankDocument("a", "a"),), 1, context())
             assert [item.id for item in result.items] == ["a"]
@@ -489,7 +526,7 @@ def test_usage_unknown_fields_are_ignored_even_without_known_counts(unknown_valu
     payload = embedding_payload()
     payload["usage"] = {"supplier_extension": unknown_value}
     with client(lambda _: httpx.Response(200, json=payload)) as http:
-        result = BailianEmbeddingProvider(http, config(), revision="configured-v1").embed(
+        result = create_embedding_provider(http, config(), revision="configured-v1").embed(
             ["first", "second"], "query", context()
         )
     assert result.usage == {}
@@ -504,7 +541,7 @@ def test_usage_known_scalar_counts_remain_validated(invalid_count: object) -> No
     }
     with client(lambda _: httpx.Response(200, json=payload)) as http:
         with pytest.raises(ProviderError) as error:
-            BailianEmbeddingProvider(http, config(), revision="configured-v1").embed(
+            create_embedding_provider(http, config(), revision="configured-v1").embed(
                 ["first", "second"], "query", context()
             )
     assert error.value.code is ErrorCode.INVALID_RESPONSE
@@ -522,13 +559,13 @@ def test_llm_uses_json_object_and_local_schema_with_deduplication() -> None:
         )
 
     with client(handler) as http:
-        provider = BailianLLMProvider(http, config())
+        provider = create_chat_provider(http, config())
         result = provider.generate_queries("untrusted input", ("zh", "en"), 3, context())
     assert result.queries == ("cancel order", "查询")
     payload = json.loads(requests[0].content)
-    assert requests[0].url.path == "/compatible-mode/v1/chat/completions"
+    assert requests[0].url.path == "/v1/chat/completions"
     assert payload["response_format"] == {"type": "json_object"}
-    assert payload["enable_thinking"] is False
+    assert "enable_thinking" not in payload
     assert "JSON" in payload["messages"][0]["content"]
     assert "untrusted input" not in payload["messages"][0]["content"]
     assert "untrusted input" in payload["messages"][1]["content"]
@@ -556,7 +593,7 @@ def test_llm_retries_invalid_json_at_most_once(content: object) -> None:
         return httpx.Response(200, json=llm_payload(content))
 
     with client(handler) as http:
-        provider = BailianLLMProvider(http, config())
+        provider = create_chat_provider(http, config())
         with pytest.raises(ProviderError) as error:
             provider.generate_queries("description", ("zh",), 6, context())
     assert len(requests) == 2
@@ -572,7 +609,7 @@ def test_llm_second_attempt_can_succeed() -> None:
         ]
     )
     with client(lambda _: httpx.Response(200, json=next(responses))) as http:
-        result = BailianLLMProvider(http, config()).generate_queries(
+        result = create_chat_provider(http, config()).generate_queries(
             "description", ("en",), 1, context()
         )
     assert result.queries == ("valid query",)
@@ -598,7 +635,7 @@ def test_llm_schema_repair_changes_prompt_without_echoing_invalid_output(
         return httpx.Response(200, json=next(responses))
 
     with client(handler) as http:
-        result = BailianLLMProvider(http, config()).generate_queries(
+        result = create_chat_provider(http, config()).generate_queries(
             "untrusted original description", ("en",), 1, context()
         )
     assert result.queries == ("valid query",)
@@ -658,7 +695,7 @@ def test_llm_schema_repair_does_not_retry_noncontent_failures(failure_kind: str)
 
     with client(handler) as http:
         with pytest.raises(ProviderError):
-            BailianLLMProvider(http, config()).generate_queries(
+            create_chat_provider(http, config()).generate_queries(
                 "description", ("en",), 1, context()
             )
     assert len(requests) == 1
@@ -675,7 +712,7 @@ def test_llm_does_not_retry_authentication_errors() -> None:
 
     with client(handler) as http:
         with pytest.raises(ProviderError) as error:
-            BailianLLMProvider(http, config()).generate_queries(
+            create_chat_provider(http, config()).generate_queries(
                 "description", ("en",), 1, context()
             )
     assert error.value.code is ErrorCode.AUTHENTICATION
@@ -698,7 +735,7 @@ def test_llm_rejects_truncated_nontext_and_tool_responses(
 ) -> None:
     with client(lambda _: httpx.Response(200, json={"choices": [choice]})) as http:
         with pytest.raises(ProviderError) as error:
-            BailianLLMProvider(http, config()).generate_queries(
+            create_chat_provider(http, config()).generate_queries(
                 "description", ("en",), 1, context()
             )
     assert error.value.code is ErrorCode.INVALID_RESPONSE

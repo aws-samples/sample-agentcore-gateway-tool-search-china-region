@@ -23,7 +23,7 @@ from semantic_core.rerank import (
     HTTPRerankProvider,
     RerankCodec,
     RerankConfig,
-    bailian_rerank_config,
+    configured_rerank_config,
 )
 
 HOST = "rerank.example.invalid"
@@ -148,15 +148,17 @@ def test_flat_wire_contract_appends_prefix_and_uses_only_explicit_headers(score_
     assert result.usage == {"total_tokens": 9}
 
 
-@pytest.mark.parametrize("model", ["gte-rerank-v2", "qwen3-rerank"])
-def test_bailian_presets_preserve_exact_request_and_response_contract(model: str) -> None:
-    settings = bailian_rerank_config(model, "revision-v2", "config-v3")
-    native = model == "gte-rerank-v2"
-    expected_path = (
-        "/api/v1/services/rerank/text-rerank/text-rerank"
-        if native
-        else "/compatible-api/v1/reranks"
+@pytest.mark.parametrize("model", ["example-nested-rerank-model", "example-rerank-model"])
+def test_configured_presets_preserve_exact_request_and_response_contract(model: str) -> None:
+    native = model == "example-nested-rerank-model"
+    settings = configured_rerank_config(
+        model,
+        "revision-v2",
+        "config-v3",
+        codec=RerankCodec("/v1/rerank", envelope="nested-output" if native else "flat"),
+        max_total_bytes=30_000 if native else 120_000,
     )
+    expected_path = "/v1/rerank" if native else "/v1/rerank"
     results = [{"index": 1, "relevance_score": 0.9}, {"index": 0, "relevance_score": 0.4}]
 
     # Callback is passed to the local mock transport below; it is not unused.
@@ -194,14 +196,18 @@ def test_bailian_presets_preserve_exact_request_and_response_contract(model: str
     assert settings.max_total_bytes == (30_000 if native else 120_000)
 
 
-def test_only_bailian_presets_restrict_model_names() -> None:
-    with pytest.raises(ValueError, match="Bailian"):
-        bailian_rerank_config("other-model", "fixture-v1")
+def test_configured_factory_requires_codec_and_accepts_any_model_name() -> None:
+    with pytest.raises(TypeError, match="codec"):
+        configured_rerank_config("other-model", "fixture-v1")
+    assert (
+        configured_rerank_config("other-model", "fixture-v1", codec=RerankCodec()).profile.model_id
+        == "other-model"
+    )
     assert RerankConfig(ModelProfile("other-model", "fixture-v1"), RerankCodec()).profile.model_id
 
 
 def test_native_codec_also_accepts_an_independent_model_path_and_score_key() -> None:
-    codec = RerankCodec(path="/custom/rank", envelope="bailian-native", score_field="score")
+    codec = RerankCodec(path="/custom/rank", envelope="nested-output", score_field="score")
 
     # Callback is passed to the local mock transport below; it is not unused.
     # nosemgrep: useless-inner-function
@@ -278,7 +284,7 @@ def test_total_byte_budget_includes_query_once_per_document_at_exact_boundary() 
     assert len(result.items) == 2
 
 
-def test_generic_document_limit_is_configurable_without_bailian_limit() -> None:
+def test_generic_document_limit_is_configurable_without_configured_limit() -> None:
     documents = tuple(RerankDocument(f"local-{i}", "text") for i in range(31))
     results = [{"index": i, "relevance_score": 31 - i} for i in range(31)]
     with httpx.Client(
@@ -342,8 +348,8 @@ def test_negative_ties_keep_input_order_and_supplier_ids_are_never_used() -> Non
     ("codec", "response"),
     [
         (RerankCodec(), {"output": {"results": []}}),
-        (RerankCodec(envelope="bailian-native"), {"results": []}),
-        (RerankCodec(envelope="bailian-native"), {"output": []}),
+        (RerankCodec(envelope="nested-output"), {"results": []}),
+        (RerankCodec(envelope="nested-output"), {"output": []}),
         (RerankCodec(), {"results": {}}),
     ],
 )

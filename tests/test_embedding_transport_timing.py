@@ -277,7 +277,13 @@ def test_auth_rotation_has_separate_attempts_and_keeps_original_deadline(clock, 
         FakeSecrets([secret("v1"), RuntimeError(MARKER) if refresh_fails else secret("v2")])
     )
     settings = ModelSettings.from_env(
-        {"MODEL_ALLOWED_HOSTS": f"{MARKER}.invalid", "MODEL_EMBEDDING_DIMENSIONS": "2"}
+        {
+            "MODEL_ALLOWED_HOSTS": f"{MARKER}.invalid",
+            "MODEL_EMBEDDING_MODEL": "example-embedding-model",
+            "MODEL_CHAT_MODEL": "example-chat-model",
+            "MODEL_RERANK_MODEL": "example-rerank-model",
+            "MODEL_EMBEDDING_DIMENSIONS": "2",
+        }
     )
     deadline = clock() + 0.4
     with httpx.Client(transport=httpx.MockTransport(respond), trust_env=False) as client:

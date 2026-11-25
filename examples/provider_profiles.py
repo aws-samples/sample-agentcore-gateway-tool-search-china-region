@@ -1,11 +1,11 @@
-"""Compare proxy, Bailian and portable configurations using MockTransport only.
+"""Compare proxy, origin and portable configurations using MockTransport only.
 
 The generic and vLLM model IDs are synthetic served-model names. These fixtures
 demonstrate request/response contracts, not service or model availability. The
 example never reads credentials and cannot select a real network transport.
 The proxy uses a caller-supplied /v1 base, never a discovered or fixed real host.
 Its 1024 dimensions describe a planned fixture index space, not evidence from a
-model listing. qwen3-rerank remains disabled with its route awaiting a real probe.
+model listing. Reranking remains disabled until its route is explicitly verified.
 """
 
 from __future__ import annotations
@@ -25,12 +25,12 @@ from semantic_core.openai_compatible import (
     OpenAIChatProvider,
     OpenAICompatibleConfig,
     OpenAIEmbeddingProvider,
-    bailian_chat_config,
-    bailian_embedding_config,
+    openai_chat_config,
+    openai_embedding_config,
 )
 from semantic_core.providers import ModelProfile, RequestContext
 
-_PROFILE_NAMES = ("proxy", "bailian", "openai-compatible", "vllm")
+_PROFILE_NAMES = ("proxy", "origin", "openai-compatible", "vllm")
 _SYNTHETIC_CREDENTIAL = "offline-fixture-only"
 _EMBEDDING_INPUT = ("取消未发货订单", "Find order cancellation")
 _DESCRIPTION = "Cancel an unshipped order using its order ID."
@@ -52,45 +52,45 @@ def select_profile(
         return ExampleProfile(
             proxy_transport,
             EmbeddingConfig(
-                ModelProfile("text-embedding-v4", "configured-fixture-v1", 1024),
+                ModelProfile("example-embedding-model", "configured-fixture-v1", 1024),
                 "/embeddings",
                 max_batch=4,
                 max_text_bytes=512,
             ),
             ChatConfig(
-                ModelProfile("qwen-plus", "configured-fixture-v1"),
+                ModelProfile("example-chat-model", "configured-fixture-v1"),
                 "/chat/completions",
                 max_text_bytes=512,
                 max_tokens=256,
             ),
         )
-    if name == "bailian":
+    if name == "origin":
         return ExampleProfile(
             OpenAICompatibleConfig(
-                "https://bailian.fixture.invalid",
-                ("bailian.fixture.invalid",),
+                "https://models.example.com",
+                ("models.example.com",),
                 auth_header_name="Authorization",
             ),
-            bailian_embedding_config("configured-fixture-v1"),
-            bailian_chat_config(),
+            openai_embedding_config("configured-fixture-v1", model_id="example-embedding-model"),
+            openai_chat_config(model_id="example-chat-model", revision="configured-fixture-v1"),
         )
     if name == "openai-compatible":
         return ExampleProfile(
             OpenAICompatibleConfig(
-                "https://compatible.fixture.invalid/tenant",
-                ("compatible.fixture.invalid",),
+                "https://models.example.com/v1",
+                ("models.example.com",),
                 auth_header_name="api-key",
                 auth_header_format="{token}",
             ),
             EmbeddingConfig(
-                ModelProfile("fixture-embedding-small", "fixture-v1", 4),
-                "/v1/embeddings",
+                ModelProfile("example-embedding-model", "fixture-v1", 4),
+                "/embeddings",
                 max_batch=4,
                 max_text_bytes=512,
             ),
             ChatConfig(
-                ModelProfile("fixture-chat-small", "fixture-v1"),
-                "/v1/chat/completions",
+                ModelProfile("example-chat-model", "fixture-v1"),
+                "/chat/completions",
                 max_text_bytes=512,
                 max_tokens=256,
             ),
@@ -98,21 +98,21 @@ def select_profile(
     if name == "vllm":
         return ExampleProfile(
             OpenAICompatibleConfig(
-                "https://vllm.fixture.invalid:8443/serving",
-                ("vllm.fixture.invalid",),
+                "https://models.example.com/v1",
+                ("models.example.com",),
                 auth_header_name="Authorization",
             ),
             EmbeddingConfig(
-                ModelProfile("fixture-served-embedding", "fixture-v1", 3),
-                "/v1/embeddings",
+                ModelProfile("example-embedding-model", "fixture-v1", 3),
+                "/embeddings",
                 max_batch=4,
                 max_text_bytes=512,
                 send_dimensions=False,
                 encoding_format=None,
             ),
             ChatConfig(
-                ModelProfile("fixture-served-chat", "fixture-v1"),
-                "/v1/chat/completions",
+                ModelProfile("example-chat-model", "fixture-v1"),
+                "/chat/completions",
                 max_text_bytes=512,
                 max_tokens=256,
                 json_mode=False,
@@ -126,8 +126,8 @@ def run(profile_name: str = "proxy") -> dict[str, object]:
     # select_profile itself has no default or discovered proxy host/allowlist.
     proxy_transport = (
         OpenAICompatibleConfig(
-            "https://proxy.fixture.invalid/v1",
-            ("proxy.fixture.invalid",),
+            "https://models.example.com/v1",
+            ("models.example.com",),
             auth_header_name="Authorization",
             auth_header_format="Bearer {token}",
         )
@@ -251,7 +251,7 @@ def run(profile_name: str = "proxy") -> dict[str, object]:
         "auth_header": profile.transport.auth_header_name,
         "rerank_enabled": False,
         "rerank_candidate": (
-            {"model": "qwen3-rerank", "path": None, "status": "requires_live_probe"}
+            {"model": "example-rerank-model", "path": None, "status": "requires_live_probe"}
             if profile_name == "proxy"
             else None
         ),

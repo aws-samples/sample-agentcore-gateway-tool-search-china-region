@@ -14,8 +14,8 @@ from semantic_core.openai_compatible import (
     OpenAIChatProvider,
     OpenAICompatibleConfig,
     OpenAIEmbeddingProvider,
-    bailian_chat_config,
-    bailian_embedding_config,
+    openai_chat_config,
+    openai_embedding_config,
 )
 from semantic_core.providers import ErrorCode, ModelProfile, ProviderError, RequestContext
 
@@ -336,19 +336,23 @@ def test_invalid_paths_fail_before_provider_creation(path: str) -> None:
         ChatConfig(CHAT_PROFILE, path, 128)
 
 
-def test_bailian_presets_are_data_and_keep_original_profile_and_fields() -> None:
-    embedding = bailian_embedding_config("configured-v1", "config-2")
-    assert embedding.profile == ModelProfile(
-        "text-embedding-v4", "configured-v1", 1024, config_version="config-2"
+def test_explicit_model_configs_use_standard_routes_and_portable_fields() -> None:
+    embedding = openai_embedding_config(
+        "configured-v1", "config-2", model_id="example-embedding-model"
     )
-    assert embedding.path == "/compatible-mode/v1/embeddings"
+    assert embedding.profile == ModelProfile(
+        "example-embedding-model", "configured-v1", 1024, config_version="config-2"
+    )
+    assert embedding.path == "/v1/embeddings"
     assert (embedding.max_batch, embedding.max_text_bytes) == (10, 8192)
     assert embedding.send_dimensions and embedding.encoding_format == "float"
     assert embedding.extra_body == {}
-    chat = bailian_chat_config("config-2")
-    assert chat.profile == ModelProfile(
-        "qwen-plus-2025-12-01", "qwen-plus-2025-12-01", config_version="config-2"
+    chat = openai_chat_config(
+        "config-2", model_id="example-chat-model-v1", revision="example-chat-model-v1"
     )
-    assert chat.path == "/compatible-mode/v1/chat/completions"
+    assert chat.profile == ModelProfile(
+        "example-chat-model-v1", "example-chat-model-v1", config_version="config-2"
+    )
+    assert chat.path == "/v1/chat/completions"
     assert chat.max_text_bytes == 8192
-    assert chat.extra_body == {"enable_thinking": False}
+    assert chat.extra_body == {}

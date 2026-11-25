@@ -52,6 +52,11 @@ def fixture():
         "public_list_price_cny": None,
         "known_public_list_price_cny": 0.000062,
         "unknown_cost_requests": 1,
+        "prices_cny_per_million_tokens": {
+            "embedding": [0.5, 0],
+            "rerank": [0.5, 0],
+            "chat": [0.8, 2],
+        },
     }
     return rows, summary
 
@@ -107,3 +112,21 @@ def test_uncovered_incomplete_request_is_excluded_from_sensitivity_subtotal():
     assert audit["audit_passed"] is True
     assert audit["non_billing_sensitivity"]["uncovered_unknown_requests"] == 1
     assert audit["non_billing_sensitivity"]["known_plus_sensitivity_subtotal_cny"] == 0.00055
+
+
+def test_audit_uses_explicit_models_and_prices_without_historical_fallback():
+    rows, summary = fixture()
+    summary["models"] = {kind: "selected-" + kind for kind in ("embedding", "chat", "rerank")}
+    for row in rows:
+        row["model"] = summary["models"][row["kind"]]
+    summary["prices_cny_per_million_tokens"] = {"embedding": [1, 0], "chat": [3, 4]}
+    summary["known_public_list_price_cny"] = 0.000138
+    audit = AUDIT["build_audit"](rows, summary)
+    assert audit["audit_passed"] is True
+    assert audit["non_billing_sensitivity"]["covered_unknown_requests"] == 0
+    summary["prices_cny_per_million_tokens"] = {}
+    summary["known_public_list_price_cny"] = 0
+    summary["unknown_cost_requests"] = 3
+    audit = AUDIT["build_audit"](rows, summary)
+    assert audit["audit_passed"] is True
+    assert audit["public_list_price_cny"] is None

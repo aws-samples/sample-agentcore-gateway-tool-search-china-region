@@ -216,16 +216,16 @@ safety margin，默认 390 秒。提升版本必须更新真实 activated_at。`
 当前不随配置分发，不能作为即时可用的撤销开关；紧急事件先停用受影响入口，
 再按本节开头的流程处理配置发布，不能等待旧缓存。
 
-启用模型后，必须显式配置`MODEL_ALLOWED_HOSTS`；`MODEL_EMBEDDING_DIMENSIONS`默认1024，
-对应当前代理已测空间，部署配置仍应记录此值。维度不从模型名称推断。
-可选 `MODEL_BASE_URL` 覆盖 secret 的 base URL；API key 永远
+启用模型后，必须显式配置 `MODEL_ALLOWED_HOSTS`、`MODEL_EMBEDDING_MODEL` 和 `MODEL_CHAT_MODEL`；重排启用时还需 `MODEL_RERANK_MODEL`。缺少或空白模型名会在读取凭证前报错。`MODEL_EMBEDDING_DIMENSIONS`默认1024，
+这是示例向量维度，部署时须填写模型实际输出的维度。维度不从模型名称推断。
+端点由 `MODEL_BASE_URL` 或 secret 的 `base_url` 提供，非空 `MODEL_BASE_URL` 优先；空字符串或纯空白视为未配置，使用 secret。二者皆缺或 secret 端点不是字符串时，首次初始化模型传输报配置不可用，服务映射为 `unavailable`。API key 永远
 只取 secret 字段，不读取环境中的 API key。配置变更应重新启动实例，变更模型空间时
 完整重建索引。warm 实例拒绝 secret 悄悄切换 endpoint，避免混用模型空间。
 
 | 选项 | 默认 |
 |---|---|
-| `MODEL_EMBEDDING_MODEL`, `MODEL_EMBEDDING_PATH` | `text-embedding-v4`, `/embeddings` |
-| `MODEL_CHAT_MODEL`, `MODEL_CHAT_PATH` | `qwen-plus`, `/chat/completions` |
+| `MODEL_EMBEDDING_MODEL`, `MODEL_EMBEDDING_PATH` | 模型名必填，例如 `example-embedding-model`；路径 `/embeddings` |
+| `MODEL_CHAT_MODEL`, `MODEL_CHAT_PATH` | 模型名必填，例如 `example-chat-model`；路径 `/chat/completions` |
 | `MODEL_EMBEDDING_REVISION`, `MODEL_CHAT_REVISION`, `MODEL_CONFIG_VERSION` | 显式配置身份 `configured-v1`, `configured-v1`, `v1`，不是供应商不可变版本承诺 |
 | `MODEL_EMBEDDING_TIMEOUT_SECONDS` | 1.0 秒，query 的核心子预算及 HTTP 上限；允许 `(0, 6]` 内有限秒数；文档使用 `MODEL_DOCUMENT_TIMEOUT_SECONDS=30` |
 | `SEMSEARCH_SEARCH_TIMEOUT_SECONDS` | 3.0 秒，Search 总预算；允许 `(0.3, 6]` 内有限秒数；provider 截止时间取配置期限与 Lambda 剩余期限减 0.3 秒的较早者 |
@@ -234,12 +234,12 @@ safety margin，默认 390 秒。提升版本必须更新真实 activated_at。`
 | `MODEL_EMBEDDING_SEND_DIMENSIONS`, `MODEL_EMBEDDING_SEND_FLOAT_FORMAT` | `false`；启用前确认配置的 endpoint 支持这些字段 |
 | `MODEL_EMBEDDING_EXTRA_BODY`, `MODEL_CHAT_EXTRA_BODY` | JSON 对象，默认 `{}`，不能覆盖受保护字段 |
 | `MODEL_RESPONSE_ALIASES`, `MODEL_VALIDATE_MODEL_ECHO` | 精确别名列表为空、回显校验 `true` |
-| `MODEL_RERANK_ENABLED` | `false`；获准开启时使用下列当前代理profile，其他endpoint须覆盖并验证 |
-| `MODEL_RERANK_PATH`, `MODEL_RERANK_ENVELOPE`, `MODEL_RERANK_SCORE_FIELD` | `/rerank`、`flat`、`relevance_score`；路径附加到已含`/v1`的base，另两项指定codec |
-| `MODEL_RERANK_MODEL`, `MODEL_RERANK_TIMEOUT_SECONDS` | `qwen3-rerank`、0.45 |
+| `MODEL_RERANK_ENABLED` | `false`；开启时按模型服务核对下列配置 |
+| `MODEL_RERANK_PATH`, `MODEL_RERANK_ENVELOPE`, `MODEL_RERANK_SCORE_FIELD` | `/rerank`、`flat`、`relevance_score`；可选 `nested-output` 对应 input/parameters 与 output.results；路径追加到配置的 base |
+| `MODEL_RERANK_MODEL`, `MODEL_RERANK_TIMEOUT_SECONDS` | 启用时模型名必填，例如 `example-rerank-model`；超时 0.45 |
 
 通用 `HTTPConfig.timeout_seconds` 默认 `1.0` 秒，也影响直接构造的
-`OpenAICompatibleConfig`、`BailianConfig` 以及使用默认传输的低层 rerank 调用。
+`OpenAICompatibleConfig`、`OriginHTTPConfig` 以及使用默认传输的低层 rerank 调用。
 服务层为各阶段显式构造独立传输，因此 rerank 仍为 0.45 秒，document/chat 仍各为 30 秒。
 表中是当前源码默认；各已部署函数仍须核对实际版本与配置。固定版本 S3 显式 `0.45`/`1.5` 秒仍优先，
 只有 S3 和环境变量均省略字段时才使用新默认。配置优先级与预算边界见

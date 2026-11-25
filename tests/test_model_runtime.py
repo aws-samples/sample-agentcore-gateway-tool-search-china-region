@@ -36,7 +36,14 @@ def secret(version="v1", key="synthetic-key", base="https://models.invalid/v1"):
 
 def settings(**values):
     return ModelSettings.from_env(
-        {"MODEL_ALLOWED_HOSTS": "models.invalid", "MODEL_EMBEDDING_DIMENSIONS": "2", **values}
+        {
+            "MODEL_ALLOWED_HOSTS": "models.invalid",
+            "MODEL_EMBEDDING_MODEL": "example-embedding-model",
+            "MODEL_CHAT_MODEL": "example-chat-model",
+            "MODEL_RERANK_MODEL": "example-rerank-model",
+            "MODEL_EMBEDDING_DIMENSIONS": "2",
+            **values,
+        }
     )
 
 
@@ -83,8 +90,8 @@ def test_invalid_secret_or_sdk_failure_has_fixed_error(response):
 def test_env_never_supplies_credential_and_rerank_remains_disabled_by_default():
     config = settings(MODEL_API_KEY="ignored", OPENAI_API_KEY="ignored")
     assert config.secret_id == "semsearch/model-api"  # nosec B105
-    assert config.embedding.profile.model_id == "text-embedding-v4"
-    assert config.chat.profile.model_id == "qwen-plus"
+    assert config.embedding.profile.model_id == "example-embedding-model"
+    assert config.chat.profile.model_id == "example-chat-model"
     assert config.rerank is None
 
 

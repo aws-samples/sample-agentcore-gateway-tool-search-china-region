@@ -69,12 +69,12 @@ AWS China 使用 `aws-cn` 分区、`arn:aws-cn:` ARN；AWS区域endpoint使用 `
 | AgentCore Gateway | 北京、宁夏；semantic search、Gateway rules、WAF integration不可用；必须CUSTOM_JWT或AWS_IAM [AWS-CN] | rules是路由/configuration覆盖，不是授权；本设计用interceptor授权，不用WAF限流 [AWS-RULES] |
 | S3、Lambda、Secrets Manager、KMS、EventBridge、SQS、DynamoDB | 两区服务可用；各官方来源列于第11节 [CN-S3] [CN-LAMBDA] [CN-SECRETS] [CN-KMS] [CN-EVENTBRIDGE] [CN-SQS] [CN-DDB] | 客户资源配置与账号配额仍需逐区验收，不把一般服务能力继续列为未知 |
 | DynamoDB | 条件写、事务、单区强一致读可用；仅Global Tables MRSC不可用 [CN-DDB] | 强读用基表/LSI，不用GSI；事务成本计双底层读写 [AWS-DDB-TX] |
-| EventBridge / Secrets轮换 | EventBridge明确两区无服务差异；Secrets一般轮换无中国区限制 [CN-EVENTBRIDGE] [CN-SECRETS] | 不能据此保证AgentCore事件格式/延迟；第三方百炼key仍需供应商侧轮换流程 |
+| EventBridge / Secrets轮换 | EventBridge明确两区无服务差异；Secrets一般轮换无中国区限制 [CN-EVENTBRIDGE] [CN-SECRETS] | 不能据此保证AgentCore事件格式/延迟；模型服务凭证仍需供应商侧轮换流程 |
 | private IdP / 其它AgentCore能力 | private IdP configurations、Memory、Policy、Harness、Payments、Knowledge Bases、Evaluations、Optimizations、Registry不可用 [AWS-CN] | 需提供Gateway服务侧可达的公网HTTPS discovery/JWKS，服务仍做真实验证；仅给Lambda配VPC不能解决私网IdP问题 |
 | Cognito | 中国区文档仅列北京，且 User Pools 不可用；AgentCore 中国区明确不能用 Cognito user pool 作 CUSTOM_JWT provider [AWS-COGNITO] [AWS-CN] | Cognito 仅为 Global OIDC 示例，不能作为 China 的可部署默认 IdP |
 | Gateway REQUEST/RESPONSE interceptors | REQUEST 转换与 Lambda 分派须在目标配置验证 [AWS-INTERCEPT] [AWS-CN] | 保留可选schema与严格封套绑定；CUSTOM_JWT/header/alias/签名字符串完整链路仍待生产配置验证 |
 | OpenSearch Service | 北京、宁夏服务可用 [CN-OPENSEARCH] | 所选版本 k-NN、过滤能力、实例和容量**未证实**；不等同于 Serverless 可用 |
-| SageMaker AI | 两区可用；Serverless、Inference的g5/p4d/Graviton/Inferentia、GPU多模型、增加shared memory不可用；三个EndpointConfig参数不支持，见第6.3节 [CN-SAGEMAKER] | 优先实验0.6B/BGE-M3档；4B/8B不是确定备选，实例/容器组合仍待实测 |
+| SageMaker AI | 两区可用；Serverless、Inference的g5/p4d/Graviton/Inferentia、GPU多模型、增加shared memory不可用；三个EndpointConfig参数不支持，见第6.3节 [CN-SAGEMAKER] | 自托管模型由部署方选定并实测，实例/容器组合须验证 |
 | X-Ray / Lambda Function URL / SQS redrive | Lambda中国区无X-Ray integration、Function URLs；SQS DLQ redrive不可用 [CN-LAMBDA] [CN-SQS] | 默认用CloudWatch日志；仅可选事件链启用DLQ时提供受控重放，不依赖托管redrive |
 
 ### 3.2 组件和数据流
@@ -265,7 +265,7 @@ catalog所有者须审核源描述，不只审核生成示例。检索副本初�
 
 向量通道默认 1 个真实描述向量 + 最多 6 个示例查询向量/工具；文本长时优先保留工具用途及参数语义，超过模型限制拆成有固定上限的片段，并记录截断/分片指标。普通上限 7 vectors/tool，分片例外计入容量预算。query/document 必须使用同一模型、维度与归一化设置；验证 finite、非零和长度，显式 L2 normalization 后以内积计算 cosine。不依赖 provider 隐含保证。
 
-离线LLM为每工具生成3条中文、3条英文示例，可按客户语言比例调整。只覆盖真实用途，不造新能力/资源ID/秘密。输入描述是不可信数据，提示与数据隔离，禁止联网/工具调用。模型配置必须验证 JSON 输出能力；返回对象`{"queries":[...]}`。**本地jsonschema强校验是必需安全边界**：最多6条、每条≤256字符、未知字段拒绝，去重和内容审核。最多重试1次，仍非法则放弃生成，不能把该代理样本推广到其它endpoint。缓存键含descriptor hash、prompt version、模型profile和语言。百炼直连JSON能力仅作可选预设的公开参考。[ALI-JSON]
+离线LLM为每工具生成3条中文、3条英文示例，可按客户语言比例调整。只覆盖真实用途，不造新能力/资源ID/秘密。输入描述是不可信数据，提示与数据隔离，禁止联网/工具调用。模型配置必须验证 JSON 输出能力；返回对象`{"queries":[...]}`。**本地jsonschema强校验是必需安全边界**：最多6条、每条≤256字符、未知字段拒绝，去重和内容审核。最多重试1次，仍非法则放弃生成，不能把该代理样本推广到其它endpoint。缓存键含descriptor hash、prompt version、模型profile和语言。应按模型服务的文档核对 JSON 模式支持。
 
 LLM 不在线参与搜索，也不决定权限。生成失败时保持真实描述向量和 BM25；不能阻塞目录删除/新增。golden evaluation 查询由独立人工/真实脱敏任务构造，不能复用生成示例造成数据泄漏。
 
@@ -299,11 +299,11 @@ RRF 设计式为 `score(tool)=Σ w_channel/(60+rank_channel(tool))`，rank 从 1
 
 可选 `min_vector_similarity` 检查授权父工具的最高归一化余弦；`min_vector_margin` 检查该值减去全部授权父工具有限分数的中位数，统计在候选截断前计算。任一启用门槛不通过或没有有限授权向量时返回空；两个门槛均启用时要求都通过，优先于 BM25 兜底，撤权后重算。余弦下限仅在绑定的模型/revision/向量空间内有解释，变更后须重新校准。禁止跨请求 rerank 绝对分数阈值；门槛不作用于 RRF/rerank 分数。
 
-默认基础排序直接返回Top-5，**rerank默认关闭**。可按部署显式开启受控试验；须有该部署的模型与预算授权，并单独报告质量及端到端延迟，实验组结果不等于普遍开启批准。[关闭组](../examples/rerank-off.dev.json)与[开启组](../examples/rerank-on.dev.json)仅改变 rerank 开关，保留代理路由，显式设置 embedding 1.0 秒、Search 3.0 秒和 rerank 450 ms 预算。生产采用仍需 部署评审 的质量证据及批准。试验时最多Top-30送rerank，仅发已授权工具摘要。示例 rerank 配置使用 `/v1/rerank`、flat envelope 和 relevance_score；需在你的模型服务验证。百炼直连的公开参考为gte-rerank-v2总预算30,000 input tokens、qwen3-rerank总预算120,000、最多500文档/单条4,000，计算`query_tokens×document_count+Σdocument_tokens`，不能直接视为代理契约。[ALI-RERANK] adapter按明确配置且经验证的模型/服务预算执行，不能因换模型静默改变外发量。
+默认基础排序直接返回Top-5，**rerank默认关闭**。可按部署显式开启受控试验；须有该部署的模型与预算授权，并单独报告质量及端到端延迟，实验组结果不等于普遍开启批准。[关闭组](../examples/rerank-off.dev.json)与[开启组](../examples/rerank-on.dev.json)仅改变 rerank 开关，保留代理路由，显式设置 embedding 1.0 秒、Search 3.0 秒和 rerank 450 ms 预算。生产采用仍需 部署评审 的质量证据及批准。试验时最多Top-30送rerank，仅发已授权工具摘要。示例 rerank 配置使用 `/v1/rerank`、flat envelope 和 relevance_score；需在你的模型服务验证。总输入量可按`query_tokens×document_count+Σdocument_tokens`核算，实际 token 限额由模型服务规定；本地 adapter 的字节上限不能当作服务 token 限额。adapter 按明确配置且经验证的模型/服务预算执行，不能因换模型静默改变外发量。
 
 没有批准的精确tokenizer时，试验初值query≤256 UTF-8 bytes、候选摘要≤512 bytes、最多30条，并留计数余量；这是工程估计，不是token保证。超预算、rerank未启用/失败/限流/timeout时，均保留原始query的实际基础顺序；向量也失败则用BM25。不静默截断用户意图。需要更准确tokenizer时先审批依赖。
 
-试验 `top_n=实际候选数≤30`，输出须覆盖有效候选且无重复/越界，分数有限，不得注入工具；同分保持实际基础顺序。官方 `relevance_score` 是本次请求内相对值，**不计划标注集校准跨请求绝对拒绝阈值**。[ALI-RERANK] 可试验请求内排序一致性/分差或在Agent侧判断任务适配，任何条件调用策略须先离线验证；不以跨请求rerank分数决定是否再次rerank。
+试验 `top_n=实际候选数≤30`，输出须覆盖有效候选且无重复/越界，分数有限，不得注入工具；同分保持实际基础顺序。本样例将 `relevance_score` 用于当前请求内排序；跨请求可比性由模型服务定义，**不计划标注集校准跨请求绝对拒绝阈值**。可试验请求内排序一致性/分差或在Agent侧判断任务适配，任何条件调用策略须先离线验证；不以跨请求rerank分数决定是否再次rerank。
 
 降级规则：
 
@@ -353,7 +353,7 @@ k-NN 必须在候选阶段正确过滤 ACL；所选 engine 对过滤的支持和
 
 以下为设计接口，不是实现代码。所有 provider 接受显式 request deadline、request ID 和版本化配置；不得自行读取环境中的无关凭证。
 
-模型启用前须确认查询及工具文本的处理许可。可配置 OpenAI-compatible 代理：百炼是模型供应商选择，代理决定实际HTTP协议和路由，不能由模型名推断DashScope原生API。默认使用受控配置的代理base URL `https://<configured-host>/v1`、确切代理host allowlist及`Authorization: Bearer <credential>`。这里的“任意”指可选择的供应商范围，不表示所有网络host自动放行，也不保证各服务支持相同请求字段。
+模型启用前须确认查询及工具文本的处理许可。可配置任何兼容 OpenAI 接口的模型服务，含自建服务；自建 HTTP 服务同样按本节配置与校验。必须显式提供模型名及端点，例如 `https://models.example.com/v1`，并配置确切 host allowlist 和认证格式；端点也可来自受控 secret 的 `base_url`。这里的“任何”指可选择的模型服务范围，不表示所有网络host自动放行，也不保证各服务支持相同请求字段。
 
 | 接口 | 逻辑方法 | 输入 / 输出与不变量 |
 |---|---|---|
@@ -363,29 +363,29 @@ k-NN 必须在候选阶段正确过滤 ACL；所选 engine 对过滤的支持和
 
 统一错误分类：timeout、rate_limited、authentication、invalid_request、unavailable、invalid_response。认证错误不频繁重试；embedding失败→BM25，rerank失败→实际基础排序，LLM失败→跳过增强；离线有限退避重试。模型alias改动视为潜在版本变更，可用snapshot则固定；无法取得内部revision时记录模型ID/配置/时间，不声称严格复现供应商内部版本。
 
-HTTP embedding/chat adapter由配置提供base_url、路径、model ID/revision、embedding维度及是否发送`dimensions`、认证header名称和格式、HTTPS host allowlist、超时、批大小及单条UTF-8字节上限。客户默认在保留`/v1`前缀的base URL上拼接相对路径`/embeddings`和`/chat/completions`，形成`/v1/embeddings`与`/v1/chat/completions`，不替换为`/compatible-mode/`或其他DashScope路径。`encoding_format`、`enable_thinking`、`response_format`等字段仅按代理已确认能力显式配置，不能因模型来自百炼自动添加。调用方注入HTTP client；认证可保留client配置，或由adapter按指定header格式使用调用方显式传入的credential，客户代理采用Bearer格式。adapter不发现环境key，不记录认证值，不接受用户输入覆盖host或路径。
+HTTP embedding/chat adapter由配置提供base_url、路径、model ID/revision、embedding维度及是否发送`dimensions`、认证header名称和格式、HTTPS host allowlist、超时、批大小及单条UTF-8字节上限。示例在保留`/v1`前缀的base URL上拼接相对路径`/embeddings`和`/chat/completions`，形成`/v1/embeddings`与`/v1/chat/completions`，不根据模型名推断或替换路径。`encoding_format`、`response_format`及服务扩展字段仅按已确认能力显式配置。调用方注入HTTP client；认证可保留client配置，或由adapter按指定header格式使用调用方显式传入的credential，示例采用 Bearer 格式。adapter不发现环境key，不记录认证值，不接受用户输入覆盖host或路径。
 
-通用embedding/chat解析只依赖标准`data/index/embedding`、`choices/message/content/finish_reason`与可选`model/usage`，忽略未知扩展字段；usage仅投影已知非负整数计数。模型回显默认精确匹配，可配置明确别名或显式关闭回显检查；返回的本地ModelProfile及向量维度始终保持配置绑定。旧百炼入口作为兼容工厂保留原有构造用法，其可选version回显检查不作为通用服务要求。
+通用embedding/chat解析只依赖标准`data/index/embedding`、`choices/message/content/finish_reason`与可选`model/usage`，忽略未知扩展字段；usage仅投影已知非负整数计数。模型回显默认精确匹配，可配置明确别名或显式关闭回显检查；返回的本地ModelProfile及向量维度始终保持配置绑定。`http_factories` 提供 `create_embedding_provider`、`create_chat_provider` 与 `create_rerank_provider`，搭配只接受无路径 origin 的 `OriginHTTPConfig`；带路径前缀的服务直接使用 `OpenAICompatibleConfig` 和对应 provider；可选 version 回显检查不作为通用服务要求。
 
-Rerank没有统一的OpenAI标准接口，保持独立codec配置：原生嵌套信封与扁平results分别处理请求路径、body、响应信封、分数字段和预算；不能从“OpenAI-compatible”推断rerank兼容性。以上配置复用既有httpx和provider协议，不增加依赖。客户端L2校验、候选ID校验、授权mask、rerank默认off及分层降级规则不变。
+Rerank没有统一的OpenAI标准接口，保持独立codec配置：`nested-output`（`output.results`）与 `flat`（顶层 `results`）分别处理请求路径、body、响应信封、分数字段和预算；不能从“OpenAI-compatible”推断rerank兼容性。以上配置复用既有httpx和provider协议，不增加依赖。客户端L2校验、候选ID校验、授权mask、rerank默认off及分层降级规则不变。
 
-### 6.2 客户代理默认接入与可选百炼直连预设
+### 6.2 模型服务配置
 
 示例模型配置需要按实际服务能力核对，不由模型名称推断协议：
 
 | 用途 | 示例配置 | 验证要求 |
 | --- | --- | --- |
-| Embedding | `text-embedding-v4`，相对 `/embeddings`，1024 维、batch 10 | 核对维度、批量、文本上限、usage 与模型版本 |
-| Rerank | `qwen3-rerank`，相对 `/rerank`，flat、relevance_score | 默认关闭，核对分数、候选范围与失败行为 |
-| 查询生成 | `qwen-plus`，相对 `/chat/completions` | 核对 JSON 输出能力、schema 校验与内容审核 |
+| Embedding | 必填模型名，例如 `example-embedding-model`，相对 `/embeddings`，1024 维、batch 10 | 核对维度、批量、文本上限、usage 与模型版本 |
+| Rerank | 启用时必填模型名，例如 `example-rerank-model`，相对 `/rerank`，flat、relevance_score | 默认关闭，核对分数、候选范围与失败行为 |
+| 查询生成 | 必填模型名，例如 `example-chat-model`，相对 `/chat/completions` | 核对 JSON 输出能力、schema 校验与内容审核 |
 
 ### 6.3 SageMaker 自托管
 
-预留 `SageMakerEmbeddingProvider`，使用 AWS SDK `InvokeEndpoint` 和独立 endpoint/model profile；下游 HTTP payload 由自托管容器版本固定，不声称兼容任意容器。可选模型：`Qwen/Qwen3-Embedding-0.6B`、`Qwen/Qwen3-Embedding-4B`、`Qwen/Qwen3-Embedding-8B`（官方模型卡 Apache-2.0）；`BAAI/bge-m3`（官方模型卡 MIT，dense 1,024 维）。第一版 BGE-M3 仅用 dense 路径，不自动启用 sparse/ColBERT 多路输出。[MODEL-QWEN] [MODEL-BGE]
+SageMaker 自托管通过 AWS SDK `InvokeEndpoint` 接入独立推理端点；需实现对应 provider，并为每个 endpoint 配置独立模型 profile。模型权重、tokenizer、推理镜像、许可证、revision 与 dense 向量输出契约由部署方选择并验证，索引不能混用不同模型的向量。
 
 RerankProvider/LLMProvider预留SageMaker adapter，但不把embedding模型当生成模型。China明确不支持Inference的g5/p4d/Graviton/Inferentia、Serverless、GPU multi-model、增加shared memory，以及EndpointConfig的 `ModelDataDownloadTimeoutInSeconds`、`ContainerStartupHealthCheckTimeoutInSeconds`、`VolumeSizeInGB`；JumpStart仅北京。[CN-SAGEMAKER] 这些是已知限制，不列为“可能可用待证实”。
 
-优先可行性实验为Qwen3-Embedding-0.6B/BGE-M3档，实例/镜像/下载/启动时长均需实测；4B/8B不作为确定可落地备选。容器和推理依赖单独审批。模型外发许可必须由你的数据所有者确认。将来若特定数据策略要求仅在AWS China处理且自托管实验不通过，可退回BM25；不能承诺SageMaker一定可替代所选HTTP服务。
+自托管可行性实验应先固定模型和输出契约，再测量实例容量、镜像、模型下载与启动时长。容器和推理依赖单独审批。若数据必须仅在指定环境处理且自托管实验不通过，可退回 BM25。
 
 ### 6.4 跨云数据与降级
 
@@ -407,7 +407,7 @@ Lambda 的网络连通性不等于 Gateway authorizer 的连通性；若目标�
 
 默认路径是Gateway REQUEST interceptor配置`passRequestHeaders=true`，读取Authorization并验证JWT/授权。官方允许读取headers、改写MCP body、短路响应。[AWS-INTERCEPT] 本服务接受 `mcp.gatewayResponse` 缺席或 null，拒绝有内容的 response 对象。目标部署仍需验证 CUSTOM_JWT、alias 及完整签名链路。
 
-interceptor删除客户端 `_auth_context` 的任何值，覆盖为schema已声明的可选string封套；含issuer/subject、必要scopes、Gateway/target、MCP request ID、query hash、policy epoch、iat/exp（最长30s）、nonce/key ID，以HMAC-SHA256签名并限制总长度≤8,192。签名secret与百炼key分开。handler中该字段**运行时强制存在**，验签/有效期/请求/context绑定失败则拒绝，并读取当前权限。nonce仅作审计关联，不声称无状态实例能跨实例阻止重放；同一请求在TTL内重复仍须当前授权与入口限流。若客户需要严格一次性消费，另审批DynamoDB条件写去重及成本。
+interceptor删除客户端 `_auth_context` 的任何值，覆盖为schema已声明的可选string封套；含issuer/subject、必要scopes、Gateway/target、MCP request ID、query hash、policy epoch、iat/exp（最长30s）、nonce/key ID，以HMAC-SHA256签名并限制总长度≤8,192。签名 secret 与模型服务凭证分开。handler中该字段**运行时强制存在**，验签/有效期/请求/context绑定失败则拒绝，并读取当前权限。nonce仅作审计关联，不声称无状态实例能跨实例阻止重放；同一请求在TTL内重复仍须当前授权与入口限流。若客户需要严格一次性消费，另审批DynamoDB条件写去重及成本。
 
 三条路径已评估：隐藏字段依赖未公开validation行为；必填身份字段会迫使客户端填写；**可选声明+可信覆盖+handler必验**在schema构造上兼容注入前后，作为修订默认。实际schema可见该扩展，但业务adapter始终query-only。所有请求ID限制为字符串，包含内部Indexer；Search签名ID另外要求非空及长度上限。不做规范化强转，签名与context逐字匹配，通知不带ID。服务仍须验证生产签名覆盖、精确alias、CUSTOM_JWT/body/context和所有绕过负例；若签名身份不能可靠抵达或可绕过，则不能上线。接入方案改变时应重新评审全部信任边界。
 
@@ -435,23 +435,23 @@ JWT 中已发放的 group/scope 可能持续有效到 token 到期。要求紧�
 
 ### 7.4 Secrets、IAM 与网络
 
-模型服务认证资料（客户默认代理Bearer凭证；百炼API key仅供显式直连配置）、Indexer OAuth client secret、内部封套signing key分别存储在Secrets Manager。后续运行时由调用方用指定配置取得认证资料并注入HTTP client，provider本身不发现凭证。运行时role只对指定secret ARN有`GetSecretValue`，按需有对应KMS key的`Decrypt`，不允许`ListSecrets`或明文配置写入日志。warm实例内缓存secret最长5min，使用VersionId/key ID记录版本而不记录值。
+模型服务认证资料（按模型服务配置的认证凭证）、Indexer OAuth client secret、内部封套signing key分别存储在Secrets Manager。后续运行时由调用方用指定配置取得认证资料并注入HTTP client，provider本身不发现凭证。运行时role只对指定secret ARN有`GetSecretValue`，按需有对应KMS key的`Decrypt`，不允许`ListSecrets`或明文配置写入日志。warm实例内缓存secret最长5min，使用VersionId/key ID记录版本而不记录值。
 
-轮换采用AWSCURRENT/AWSPREVIOUS重叠，401受控刷新一次后按provider分层降级：embedding→BM25、rerank→实际基础排序。Secrets一般轮换在两区可用，但不替百炼创建/撤销key；供应商侧操作仍需流程。signing key窗口强制满足 `previous_window ≥ signer_secret_cache_TTL + envelope_TTL + max_clock_skew + safety_margin`；初值300+30+30+30=390s（6.5min），配置变化由CDK assertion重验，不写死6min。未知kid受控刷新一次；泄露紧急撤销立即fail closed，不延用previous宽限。[AWS-SECRETS] [CN-SECRETS]
+轮换采用AWSCURRENT/AWSPREVIOUS重叠，401受控刷新一次后按provider分层降级：embedding→BM25、rerank→实际基础排序。Secrets一般轮换在两区可用，但不替模型服务创建或撤销凭证；供应商侧操作仍需流程。signing key窗口强制满足 `previous_window ≥ signer_secret_cache_TTL + envelope_TTL + max_clock_skew + safety_margin`；初值300+30+30+30=390s（6.5min），配置变化由CDK assertion重验，不写死6min。未知kid受控刷新一次；泄露紧急撤销立即fail closed，不延用previous宽限。[AWS-SECRETS] [CN-SECRETS]
 
 | 主体 | 必要权限范围 | 明确不授予 |
 |---|---|---|
 | Search role | 本 Gateway 快照 `s3:GetObject/GetObjectVersion`，manifest/授权记录 `dynamodb:GetItem`（必要查询另列），指定 secrets/KMS，CloudWatch；自托管时指定 endpoint 的 `sagemaker:InvokeEndpoint` | catalog 写、target 管理、任意 prefix、部署权限 |
 | CatalogIndexer / Enhancer roles | 分别按需本Gateway S3读写、state表manifest/revision/progress条件更新；protected表精确ARN仅GetItem/ConditionCheckItem；Indexer机器secret/Gateway invoke与只读target查询；Enhancer模型secret | 默认无队列/lease权限、target写、protected表写、授权策略写、全账号secret读 |
 | 工具发布 / 可选同步 role | 指定 Gateway 的 `SynchronizeGatewayTargets` 和必要状态读取；静态 schema 更新由发布角色另行审批 | Search/Indexer 数据面复用该写权限 |
-| 可信 interceptor/proxy role | JWT/JWKS配置、授权读、指定limiter计数条件写、signing secret、日志 | 索引写、百炼key、业务工具执行角色权限 |
+| 可信 interceptor/proxy role | JWT/JWKS配置、授权读、指定limiter计数条件写、signing secret、日志 | 索引写、模型服务凭证、业务工具执行角色权限 |
 | Gateway execution role | 仅必要 Lambda alias 的 invoke 和各 target 所需权限 | 全账户 Lambda invoke 或通用管理员 |
 | Scheduler | 指定CatalogIndexer/Enhancer alias的invoke；可选事件链权限另审 | 默认无SendMessage/trail权限、索引写、业务数据读 |
 | 授权管理员 / deploy role | 独立变更渠道，策略写和 CDK 所需权限分离 | 将其长期凭证交给 Search/Indexer |
 
 IAM action/resource支持按Service Authorization Reference和中国区真实资源核对。`GetGateway`、`GetGatewayTarget`、`ListGatewayTargets`、`InvokeGateway`可限定Gateway ARN；`ListGateways`不支持同样的资源级限定，默认使用注册清单避免它。中国区Gateway ARN为`arn:aws-cn:bedrock-agentcore:<region>:<account>:gateway/<gateway-id>`。只有确实不支持资源级限制的action才使用`Resource:"*"`并加可用条件。DynamoDB state表以LeadingKeys进一步限制内容/缓存/limiter；独立protected表使用精确ARN权限，移除旧PROTECTED键隔离，四角色仅GetItem、两个后台另有ConditionCheckItem。授权管理员由外部管理渠道单独配置，不由运行stack创建或授权。S3限制prefix/version；Secrets所需KMS限制key、ViaService/encryption context。Lambda permission绑定Gateway/执行role与账号条件，以官方目标调用方式验证，不臆造service principal。[AWS-IAM]
 
-默认provider出站仅HTTPS/TLS，按所选服务的确切host allowlist；百炼workspace或其他provider endpoint变更必须同时更新受控配置/允许域，不使用通配所有供应商或workspace的宽规则。供应商配置不等于网络全部放行。Lambda是否放VPC由部署网络方案确定，NAT/代理费用列第9节；JWKS下载受issuer allowlist/SSRF防护。Gateway 服务侧可达前提仍需核对，服务仍按第7.1节做真实探针，不能用Lambda的内网连通性代替。
+默认provider出站仅HTTPS/TLS，按模型服务的确切host allowlist；模型服务的 endpoint 变更必须同时更新受控配置/允许域，不使用通配所有供应商或项目/租户的宽规则。供应商配置不等于网络全部放行。Lambda是否放VPC由部署网络方案确定，NAT/代理费用列第9节；JWKS下载受issuer allowlist/SSRF防护。Gateway 服务侧可达前提仍需核对，服务仍按第7.1节做真实探针，不能用Lambda的内网连通性代替。
 
 ## 8. 技术栈与依赖
 
@@ -484,7 +484,7 @@ IAM action/resource支持按Service Authorization Reference和中国区真实资
 
 包许可证依据官方项目/PyPI 元数据；精确 wheel、OS/native libraries 和 transitive licenses 必须随锁版本复核，尤其 NumPy/torch。npm CLI 的 Node.js、Python runtime 和容器 base image 也是发布 SBOM 输入，不因不在 Python requirements 中而遗漏。（见第8节每个包名的官方元数据链接）
 
-默认不用 `openai` 或 `dashscope` SDK，直接通过 httpx 调用已经文档化的 API，避免重复 HTTP 栈；不用 LangChain、FAISS、BM25 外部库或 tokenizer 模型下载。BM25/RRF 小核心在 检索核心 自行实现并由数学 fixture 验证。token 预算没有官方 tokenizer 依赖时先用保守字符/字节上限，API 参数错误受控处理；若精确 tokenizer 成为必要条件，增加依赖必须重新审批。自托管如需 FlagEmbedding/sentencepiece 等额外包，必须另列后才可加入。
+默认不使用特定模型服务的 SDK，直接通过 httpx 调用已经文档化的 API，避免重复 HTTP 栈；不用 LangChain、FAISS、BM25 外部库或 tokenizer 模型下载。BM25/RRF 小核心在 检索核心 自行实现并由数学 fixture 验证。token 预算没有官方 tokenizer 依赖时先用保守字符/字节上限，API 参数错误受控处理；若精确 tokenizer 成为必要条件，增加依赖必须重新审批。自托管如需 FlagEmbedding/sentencepiece 等额外包，必须另列后才可加入。
 
 ## 9. 可观测性、运维与成本
 
@@ -524,7 +524,7 @@ IAM action/resource支持按Service Authorization Reference和中国区真实资
 | Internet egress / GB | ¥0.933（网页标Promotional） | 同左 | [PRICE-EGRESS] |
 | NAT / 小时；处理GB | ¥0.37；¥0.37 | ¥0.427；¥0.427 | [PRICE-NAT] |
 
-百炼中国内地embedding v4为¥0.5/百万输入tokens；gte-rerank-v2 ¥0.8/百万，qwen3-rerank ¥0.5/百万。qwen-plus-2025-12-01非thinking在**输入≤128K档**为¥0.8入/¥2出，128K–256K为¥2.4/¥20，256K–1M为¥4.8/¥48；离线约1k输入只适用首档，不能外推长上下文。不同部署地域另价，换workspace需重新预算，不自动跨境failover。[ALI-MODELS] [ALI-RERANK] 这些是历史百炼直连公开价格及后文敏感性分析的输入，不是客户代理报价或型号可用性证明；代理计费须另按实际条款核对。
+模型费用按模型服务的公开价目及实际合同计算。后文敏感性分析中的单价是历史估算输入，不是部署默认价目；输入/输出、上下文阶梯、缓存和批处理折扣均须按该服务的计费规则核对，不自动跨地域切换。
 
 ### 9.3 两区月度情景与预算提案
 
@@ -556,7 +556,7 @@ IAM action/resource支持按Service Authorization Reference和中国区真实资
 
 `Recall@5 = |top5 ∩ relevant_authorized| / |relevant_authorized|`。对 `1≤相关授权工具数≤5` 的query取macro average，目标≥0.90；对 `>5` 单独报告Recall及可达上限，Hit@5目标≥0.95。零相关query不混入Recall分母，单报误推荐率/Agent拒绝质量。报告中英文、权限比例、相关集规模分布、每组样本数及bootstrap 95% CI；不借总体掩盖小组回退。RRF/rerank分数不用于跨请求绝对相关性拒绝。
 
-工具数档100/500/2k/5k/10k/20k；1/5/20 QPS，1%/10%/100%授权mask；原始描述与7 vectors/tool两组。每档至少10min稳态，独立cold/refresh批次；测p50/p95/p99、常驻/双版本/临时buffer峰值、加载/重建时长、限流、usage及费用。BM25、向量、RRF、RRF+已验证路由的reranker、示例开关分别消融；qwen3-rerank 的协议、质量与生产延迟须分别验证，gte-v2仅属于另选直连时的候选。增益标准与最低样本/CI、rerank调用比例和费用上限在查看 holdout 之前确定，防事后挑指标。100-Gateway端到端档仅在配额批准后运行，循环轮询负载同时计入。
+工具数档100/500/2k/5k/10k/20k；1/5/20 QPS，1%/10%/100%授权mask；原始描述与7 vectors/tool两组。每档至少10min稳态，独立cold/refresh批次；测p50/p95/p99、常驻/双版本/临时buffer峰值、加载/重建时长、限流、usage及费用。BM25、向量、RRF、RRF+已验证路由的reranker、示例开关分别消融；所选 rerank 模型的协议、质量与生产延迟须分别验证。增益标准与最低样本/CI、rerank调用比例和费用上限在查看 holdout 之前确定，防事后挑指标。100-Gateway端到端档仅在配额批准后运行，循环轮询负载同时计入。
 
 ## 11. 公开参考资料
 
@@ -583,12 +583,6 @@ IAM action/resource支持按Service Authorization Reference和中国区真实资
 - [AWS-IAM：AgentCore Service Authorization Reference](https://docs.aws.amazon.com/service-authorization/latest/reference/list_bedrock-agentcore.html)
 - [MCP-TOOLS：MCP tools 规范、分页与 CallToolResult](https://modelcontextprotocol.io/specification/2025-06-18/server/tools)
 - [OIDC：OpenID Connect Core](https://openid.net/specs/openid-connect-core-1_0.html)；[JWT-BCP：RFC 8725](https://www.rfc-editor.org/rfc/rfc8725)
-- [ALI-EMBED：文本向量 API](https://help.aliyun.com/zh/model-studio/text-embedding-synchronous-api)
-- [ALI-RERANK：文本排序 API](https://help.aliyun.com/zh/model-studio/text-rerank-api)
-- [ALI-COMPAT：OpenAI compatibility](https://help.aliyun.com/zh/model-studio/developer-reference/compatibility-of-openai-with-dashscope)
-- [ALI-MODELS：模型名称与价格](https://help.aliyun.com/zh/model-studio/model-pricing)
-- [MODEL-QWEN：Qwen3-Embedding-0.6B 官方模型卡及家族表](https://huggingface.co/Qwen/Qwen3-Embedding-0.6B/blob/main/README.md)
-- [MODEL-BGE：BAAI/bge-m3 官方模型卡](https://huggingface.co/BAAI/bge-m3/blob/main/README.md)
 - DEPS：各 PyPI 维护者元数据：[boto3](https://pypi.org/pypi/boto3/json)、[botocore](https://pypi.org/pypi/botocore/json)、[httpx](https://pypi.org/pypi/httpx/json)、[numpy](https://pypi.org/pypi/numpy/json)、[jieba](https://pypi.org/pypi/jieba/json)、[jsonschema](https://pypi.org/pypi/jsonschema/json)、[PyJWT](https://pypi.org/pypi/PyJWT/json)、[cryptography](https://pypi.org/pypi/cryptography/json)、[aws-cdk-lib](https://pypi.org/pypi/aws-cdk-lib/json)、[constructs](https://pypi.org/pypi/constructs/json)、[pytest](https://pypi.org/pypi/pytest/json)、[pytest-cov](https://pypi.org/pypi/pytest-cov/json)、[opensearch-py](https://pypi.org/pypi/opensearch-py/json)、[torch](https://pypi.org/pypi/torch/json)、[transformers](https://pypi.org/pypi/transformers/json)、[sentence-transformers](https://pypi.org/pypi/sentence-transformers/json)、[safetensors](https://pypi.org/pypi/safetensors/json)；[aws-cdk npm](https://registry.npmjs.org/aws-cdk/latest)
 
 [AWS-SEARCH]: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-using-mcp-semantic-search.html
@@ -614,12 +608,6 @@ IAM action/resource支持按Service Authorization Reference和中国区真实资
 [MCP-TOOLS]: https://modelcontextprotocol.io/specification/2025-06-18/server/tools
 [OIDC]: https://openid.net/specs/openid-connect-core-1_0.html
 [JWT-BCP]: https://www.rfc-editor.org/rfc/rfc8725
-[ALI-EMBED]: https://help.aliyun.com/zh/model-studio/text-embedding-synchronous-api
-[ALI-RERANK]: https://help.aliyun.com/zh/model-studio/text-rerank-api
-[ALI-COMPAT]: https://help.aliyun.com/zh/model-studio/developer-reference/compatibility-of-openai-with-dashscope
-[ALI-MODELS]: https://help.aliyun.com/zh/model-studio/model-pricing
-[MODEL-QWEN]: https://huggingface.co/Qwen/Qwen3-Embedding-0.6B/blob/main/README.md
-[MODEL-BGE]: https://huggingface.co/BAAI/bge-m3/blob/main/README.md
 
 [AWS-QUOTAS]: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/bedrock-agentcore-limits.html
 [AWS-CREATE]: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-create.html
@@ -633,7 +621,6 @@ IAM action/resource支持按Service Authorization Reference和中国区真实资
 [AWS-SCHEDULER-LAMBDA]: https://docs.aws.amazon.com/lambda/latest/dg/with-eventbridge-scheduler.html
 [AWS-LAMBDA-ASYNC]: https://docs.aws.amazon.com/lambda/latest/dg/invocation-async-error-handling.html
 [AWS-TRAIL-LATENCY]: https://docs.aws.amazon.com/awscloudtrail/latest/userguide/get-and-view-cloudtrail-log-files.html
-[ALI-JSON]: https://help.aliyun.com/zh/model-studio/json-mode
 [CN-S3]: https://docs.amazonaws.cn/en_us/aws/latest/userguide/s3.html
 [CN-LAMBDA]: https://docs.amazonaws.cn/en_us/aws/latest/userguide/lambda.html
 [CN-SECRETS]: https://docs.amazonaws.cn/en_us/aws/latest/userguide/secretsmanager.html

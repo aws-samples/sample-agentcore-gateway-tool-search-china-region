@@ -65,18 +65,19 @@
     }
   },
   "model_settings": {
-    "MODEL_ALLOWED_HOSTS": "model.example.invalid",
+    "MODEL_ALLOWED_HOSTS": "models.example.com",
     "MODEL_EMBEDDING_DIMENSIONS": "1024",
     "MODEL_EMBEDDING_MAX_BATCH": "10",
     "MODEL_RERANK_ENABLED": "true",
     "MODEL_RERANK_PATH": "/rerank",
     "MODEL_RERANK_ENVELOPE": "flat",
     "MODEL_RERANK_SCORE_FIELD": "relevance_score",
-    "MODEL_BASE_URL": "https://model.example.invalid/v1",
-    "MODEL_EMBEDDING_MODEL": "text-embedding-v4",
+    "MODEL_BASE_URL": "https://models.example.com/v1",
+    "MODEL_CHAT_MODEL": "example-chat-model",
+    "MODEL_EMBEDDING_MODEL": "example-embedding-model",
     "MODEL_EMBEDDING_PATH": "/embeddings",
     "MODEL_EMBEDDING_TIMEOUT_SECONDS": "1.0",
-    "MODEL_RERANK_MODEL": "qwen3-rerank",
+    "MODEL_RERANK_MODEL": "example-rerank-model",
     "MODEL_RERANK_TIMEOUT_SECONDS": "0.45"
   },
   "service_settings": {

@@ -84,6 +84,12 @@ PYTHONPATH=src .venv/bin/python examples/offline_search.py
 | Indexer | `semantic_service.runtime.indexer_handler` |
 | Enhancer | `semantic_service.runtime.enhancer_handler` |
 
+模型能力支持任何兼容 OpenAI 接口的模型服务，含自建服务。启用时必须显式配置模型名和端点，不提供供应商默认值：
+
+- `MODEL_EMBEDDING_MODEL=example-embedding-model`、`MODEL_CHAT_MODEL=example-chat-model`；开启重排时还需 `MODEL_RERANK_MODEL=example-rerank-model`。
+- 端点示例为 `MODEL_BASE_URL=https://models.example.com/v1`，也可由受控 secret 的 `base_url` 提供。非空 `MODEL_BASE_URL` 优先，空白值使用 secret；二者皆缺时首次初始化模型传输报配置不可用；`MODEL_ALLOWED_HOSTS` 必须列出对应的确切主机名。
+- 示例端点与模型名均为占位值，部署前需替换并验证维度、路由及服务支持的请求字段。OpenAI 接口兼容性不包含重排；重排的路径、请求格式和响应格式须单独配置与验证。
+
 Gateway 身份、两张状态表、模型开关等环境变量，以及版本化 S3 配置的读取规则，见[服务配置](docs/service.md#配置与入口)。
 部署参数、REQUEST 独立包入口和可选 ECS Search 的配置见[部署步骤](docs/deploy.md)。
 

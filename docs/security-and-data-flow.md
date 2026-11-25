@@ -36,19 +36,19 @@ JWT 是身份服务签发的短期令牌。OIDC 提供身份元数据，JWKS 提
 
 权限变化在下一次授权读取时生效。已经发往模型的数据不能撤回；最终权限检查之后发生的撤销也存在时间窗口。工具自身必须继续执行资源级授权。目录轮询还存在观察上游变化的窗口，不能把本地安全目录称为上游实时事实。具体新鲜度限制见[已知限制](known-limitations.md)。
 
-## 哪些数据会离开 AWS
+## 模型数据发送到哪里
 
-当前模型路径是受控 OpenAI-compatible 代理，再由代理访问所选百炼模型。模型名称不能证明实际处理地域、代理托管地点或数据保留方式。现有设计已允许查询和工具描述外发，但代理及后端的处理地点、保留和训练条款仍须按客户登记核实；本文不作未经核实的数据驻留承诺。[设计中的外发决定](design.md#64-跨云数据与降级)保留批准范围。
+模型路径指向受控配置的 OpenAI-compatible 服务，可为远程服务或自建服务，也可经代理转发。只要请求链路中的代理、模型后端或其他处理环节位于 AWS 之外，下表中的模型文本就可能离开 AWS；后端部署在 AWS 内并不能排除外部代理接收文本。模型名称不能证明实际处理地域、代理托管地点或数据保留方式。代理及后端的处理地点、保留和训练条款须按客户登记核实；本文不作未经核实的数据驻留承诺。[设计中的外发决定](design.md#64-跨云数据与降级)保留批准范围。
 
 | 发送方 → 接收方 | 发出的内容 | 触发条件与限制 |
 |---|---|---|
-| Search → 模型代理 → 百炼 embedding | 用户的完整查询文本 | `SEMSEARCH_MODELS_ENABLED=true`，当前主体策略 `allow_query_egress=true`，且模型、向量版本与预算可用 |
-| Search → 模型代理 → rerank | 查询和当前已授权候选的工具摘要 | 另需 `MODEL_RERANK_ENABLED=true`，并通过候选数量、文本长度和剩余预算检查；默认关闭 |
-| Enhancer → 模型代理 → 生成模型 | 工具摘要、要求生成的语言和条数 | 模型启用；生成结果通过结构校验后进入缓存，默认不自动获准使用 |
-| Enhancer → 模型代理 → embedding | 工具摘要与可信审核回调批准的示例文本 | 模型启用；当前部署未配置审核回调，默认只使用真实工具摘要 |
+| Search → 配置的模型服务（embedding，可经代理） | 用户的完整查询文本 | `SEMSEARCH_MODELS_ENABLED=true`，当前主体策略 `allow_query_egress=true`，且模型、向量版本与预算可用 |
+| Search → 配置的模型服务（rerank，可经代理） | 查询和当前已授权候选的工具摘要 | 另需 `MODEL_RERANK_ENABLED=true`，并通过候选数量、文本长度和剩余预算检查；默认关闭 |
+| Enhancer → 配置的模型服务（chat，可经代理） | 工具摘要、要求生成的语言和条数 | 模型启用；生成结果通过结构校验后进入缓存，默认不自动获准使用 |
+| Enhancer → 配置的模型服务（embedding，可经代理） | 工具摘要与可信审核回调批准的示例文本 | 模型启用；当前部署未配置审核回调，默认只使用真实工具摘要 |
 | Indexer → 客户 IdP 的 OAuth 端点 | `client_id`、`client_secret`、请求的 scope 等认证参数 | 使用独立机器客户端换取短期令牌；发送到显式配置的 token endpoint |
 | REQUEST → 客户 IdP | 配置的 OIDC discovery/JWKS 地址的读取请求 | 需要身份元数据或公钥刷新时；本项目验证器不把原始 JWT 发给 IdP |
-| Search / Enhancer → 模型代理 | 模型认证凭据，默认放入 `Authorization` 请求头 | 只发往通过精确主机允许清单校验的 HTTPS 模型端点 |
+| Search / Enhancer → 配置的模型服务（可经代理） | 模型认证凭据，默认放入 `Authorization` 请求头 | 只发往通过精确主机允许清单校验的 HTTPS 模型端点 |
 
 外发字段来自[服务搜索](../src/semantic_service/search.py)、[模型适配器](../src/semantic_service/models.py)、[增强器](../src/semantic_service/enhancer.py)、[机器 OAuth](../src/semantic_service/catalog.py)和[身份验证器](../src/semantic_service/auth.py)。Gateway 自身怎样获取和缓存身份元数据属于 Gateway 配置与服务行为，需按部署验收核对，不能用本项目 REQUEST 的行为代替。
 

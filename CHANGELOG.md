@@ -1,5 +1,14 @@
 # 变更记录
 
+## 未发布：模型服务配置与迁移
+
+- 启用模型时显式提供 `MODEL_EMBEDDING_MODEL`、`MODEL_CHAT_MODEL`；启用重排还需 `MODEL_RERANK_MODEL`。端点由非空 `MODEL_BASE_URL` 或 secret 的 `base_url` 提供，前者优先；空白环境值使用 secret，二者皆缺时模型调用报配置不可用。
+- 嵌套重排格式使用 `MODEL_RERANK_ENVELOPE=nested-output`，对应 `input`/`parameters` 请求及 `output.results` 响应；顶层格式继续使用 `flat`。
+- Python 调用方从 `semantic_core.http_factories` 导入 `OriginHTTPConfig`、`create_embedding_provider`、`create_chat_provider`、`create_rerank_provider`，替代 `semantic_core.bailian` 的配置与 provider 工厂。配置工厂使用 `openai_embedding_config`、`openai_chat_config`、`configured_rerank_config`，显式传入模型名、revision 及适用的 codec；不提供旧名称别名。
+- 真实评测与参考脚本要求 `--embedding-model`、`--chat-model`；启用重排的评测还需 `--rerank-model`。真实调优要求三类模型参数及已验证的 `--rerank-path`。mock 模式无需模型参数。
+- 费用汇总默认保留 usage 并显示费用未知；只有显式输入单价时才估算费用，不内置历史报价。匿名历史报告保留结论，不列模型身份与服务价目。
+- 调优的端点身份使用规范化 URL 与本地私有盐的 HMAC；跨阶段须保留 `.local/tuning-endpoint-salt`，该文件不能随报告分享。旧的无盐配置不能用于继续冻结运行，请使用新的输出目录。
+
 ## 0.1.0
 
 - 提供 REQUEST、Search、Indexer、Enhancer 及中国区域 CDK 部署定义。

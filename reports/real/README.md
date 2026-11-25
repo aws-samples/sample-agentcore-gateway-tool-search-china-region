@@ -11,8 +11,8 @@ make no production quality or capacity claim.
 
 The completed reference uses the deterministic 100-query stratified
 retrieval sample, with 30 paired selection queries at each of 20/50/100/200/500
-tools. Both real-mode switches are required. Rerank is disabled; models are
-text-embedding-v4 (1024 dimensions, batches of 10) and qwen-plus (thinking off).
+tools. Both real-mode switches are required. Rerank is disabled. The embedding model used in this experiment produces 1024-dimensional
+vectors in batches of 10; a chat model selects tools. Model identities are not disclosed.
 Existing versioned mock examples are used; no new live examples are generated.
 
 Only Markdown summaries are distributed. Raw JSON/JSONL, incomplete attempts and mock output are omitted. These summaries describe historical synthetic experiments; they do not prove current-default performance. A fresh run generates new raw data in its chosen local output directory.
@@ -31,12 +31,19 @@ Run a fresh reference into a new output directory:
 ```sh
 SEMANTIC_EVAL_REAL=1 AWS_REGION=cn-north-1 AWS_DEFAULT_REGION=cn-north-1 \
 PYTHONPATH=src .venv/bin/python reports/real/run_reference.py --mode real \
+  --embedding-model example-embedding-model --chat-model example-chat-model \
   --query-limit 100 --timeout 60 --output-dir .local/reference-rerun
 PYTHONPATH=src .venv/bin/python scripts/run_evaluation.py --mode mock \
   --query-limit 100 --queries-per-size 30 --output-dir .local/reference-rerun/mock
 python3 reports/real/summarize_cost.py --report-dir .local/reference-rerun
 python3 reports/real/summarize_comparisons.py --report-dir .local/reference-rerun
 ```
+
+The cost summarizer leaves prices unknown unless `--prices-json` supplies per-role
+`[input, output]` CNY rates per million tokens. Historical model identities and rate schedules are not listed. Usage and cost
+totals may reveal effective rates; these summaries do not guarantee that the
+service source is unidentifiable. Without the raw ledgers, the published records
+cannot fully reproduce the per-request estimates.
 
 Actual model aliases may evolve; the local revision label does not pin provider
 weights. Timings include the local provider round trip, exclude index build for

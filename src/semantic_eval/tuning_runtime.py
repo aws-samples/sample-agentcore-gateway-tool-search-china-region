@@ -3,7 +3,12 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
+import math
+import os
+import secrets
+import stat
 import time
 from collections import Counter
 from collections.abc import Iterator, Mapping, Sequence
@@ -13,6 +18,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
+from urllib.parse import urlsplit, urlunsplit
 
 import httpx
 import numpy as np
@@ -30,11 +36,6 @@ from semantic_core.providers import (
 )
 
 CAPS = {"embedding": 1500, "rerank": 1000, "chat": 500}
-MODELS = {
-    "embedding": "text-embedding-v4",
-    "rerank": "qwen3-rerank",
-    "chat": "qwen-plus",
-}
 TOKEN_KEYS = ("prompt_tokens", "completion_tokens", "input_tokens", "output_tokens", "total_tokens")
 
 
@@ -58,6 +59,44 @@ def utc_now() -> str:
 
 def file_sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def endpoint_fingerprint(base_url: str, salt_path: Path, *, create: bool = False) -> str:
+    """Bind a validated endpoint to a private, persistent local HMAC salt.
+
+    Keep the salt outside captured artifacts. Losing it prevents resuming a
+    frozen run; a digest alone is not an attestation of model identity.
+    """
+    parts = urlsplit(base_url)
+    host = parts.hostname
+    if parts.scheme.lower() != "https" or host is None or "?" in base_url or "#" in base_url:
+        raise RunStopped("endpoint identity requires a validated HTTPS endpoint")
+    host = f"[{host.lower()}]" if ":" in host else host.lower()
+    authority = host if parts.port in (None, 443) else f"{host}:{parts.port}"
+    normalized = urlunsplit(("https", authority, parts.path.rstrip("/"), "", ""))
+    try:
+        if create:
+            salt_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+            try:
+                descriptor = os.open(
+                    salt_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600
+                )
+            except FileExistsError:
+                pass
+            else:
+                with os.fdopen(descriptor, "wb") as stream:
+                    stream.write(secrets.token_bytes(32))
+        descriptor = os.open(salt_path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        with os.fdopen(descriptor, "rb") as stream:
+            metadata = os.fstat(stream.fileno())
+            if not stat.S_ISREG(metadata.st_mode) or metadata.st_mode & 0o077:
+                raise ValueError("unsafe salt file")
+            salt = stream.read(33)
+            if len(salt) != 32:
+                raise ValueError("invalid salt length")
+    except (OSError, ValueError):
+        raise RunStopped("missing or invalid private endpoint identity salt") from None
+    return hmac.new(salt, normalized.encode("utf-8"), hashlib.sha256).hexdigest()
 
 
 def read_provenance(path: Path) -> dict[str, Any]:
@@ -111,6 +150,15 @@ def validate_test_provenance(
         or boundary.get("external_time_attestation") is not False
     ):
         raise RunStopped("mismatched freeze provenance")
+    model_path = output / "model-config.json"
+    model_hash = frozen.get("model_config_sha256")
+    if model_hash is not None or model_path.exists():
+        if (
+            not model_path.is_file()
+            or model_hash != file_sha256(model_path)
+            or boundary.get("model_config_sha256") != model_hash
+        ):
+            raise RunStopped("mismatched model configuration provenance")
     if not smoke and (not isinstance(freeze_evidence_ref, str) or not freeze_evidence_ref.strip()):
         raise RunStopped("external freeze capture reference required before test")
     return {
@@ -120,6 +168,7 @@ def validate_test_provenance(
         "freeze_evidence_ref": None if smoke else freeze_evidence_ref,
         "external_reference_verified": False,
         "smoke_only": smoke,
+        "model_config_sha256": model_hash,
     }
 
 
@@ -145,14 +194,56 @@ def claim_test(
 class Ledger:
     """Count actual HTTP attempts for a serial runner, including prior incomplete ones."""
 
-    def __init__(self, output: Path, *, caps: Mapping[str, int] = CAPS) -> None:
+    def __init__(
+        self,
+        output: Path,
+        *,
+        models: Mapping[str, str],
+        prices: Mapping[str, Sequence[float]] | None = None,
+        caps: Mapping[str, int] = CAPS,
+    ) -> None:
         if set(caps) != set(CAPS) or any(
             type(value) is not int or not 0 <= value <= CAPS[kind] for kind, value in caps.items()
         ):
             raise ValueError("invalid or unauthorized call budget")
+        if set(models) != set(CAPS):
+            raise ValueError("explicit embedding, rerank and chat model names are required")
+        for model in models.values():
+            ModelProfile(model, "ledger-v1")
+        self.models = dict(models)
+        self.prices: dict[str, tuple[float, float]] = {}
+        for kind, rates in (prices or {}).items():
+            if (
+                kind not in CAPS
+                or not isinstance(rates, list | tuple)
+                or len(rates) != 2
+                or any(
+                    isinstance(rate, bool)
+                    or not isinstance(rate, int | float)
+                    or not math.isfinite(rate)
+                    or rate < 0
+                    for rate in rates
+                )
+            ):
+                raise ValueError("prices require nonnegative input/output rates per million tokens")
+            self.prices[kind] = (float(rates[0]), float(rates[1]))
         self.output = output
         output.mkdir(parents=True, exist_ok=True)
         self.path = output / "usage-ledger.jsonl"
+        accounting_path = output / "accounting-config.json"
+        accounting = {
+            "models": self.models,
+            "prices_cny_per_million_tokens": {
+                kind: list(rates) for kind, rates in self.prices.items()
+            },
+        }
+        if accounting_path.exists():
+            if read_provenance(accounting_path) != accounting:
+                raise RunStopped("persisted accounting configuration mismatch")
+        elif self.path.exists() and self.path.stat().st_size:
+            raise RunStopped("missing persisted accounting configuration")
+        else:
+            save_json(accounting_path, accounting)
         self.caps = dict(caps)
         self.phase = "preflight"
         self.rows: list[dict[str, Any]] = []
@@ -171,7 +262,7 @@ class Ledger:
                     or type(row.get("sequence")) is not int
                     or row["sequence"] != sequence
                     or row.get("kind") not in self.caps
-                    or row.get("model") != MODELS[row["kind"]]
+                    or row.get("model") != self.models[row["kind"]]
                     or type(row.get("input_count")) is not int
                     or row["input_count"] < 0
                     or type(row.get("complete_response")) is not bool
@@ -192,7 +283,7 @@ class Ledger:
         counts = Counter(str(row["kind"]) for row in self.rows)
         return {kind: counts[kind] for kind in self.caps}
 
-    def preflight(self, required: Mapping[str, int]) -> None:
+    def preflight(self, required: Mapping[str, int], *, persist: bool = True) -> None:
         if any(
             kind not in self.caps or type(count) is not int or count < 0
             for kind, count in required.items()
@@ -201,14 +292,15 @@ class Ledger:
         counts = self.counts()
         if any(counts[kind] + count > self.caps[kind] for kind, count in required.items()):
             raise RunStopped("call budget exceeded in preflight")
-        save_json(
-            self.output / f"preflight-{self.phase}.json",
-            {
-                "caps": self.caps,
-                "already_attempted": counts,
-                "required_upper_bound": dict(required),
-            },
-        )
+        if persist:
+            save_json(
+                self.output / f"preflight-{self.phase}.json",
+                {
+                    "caps": self.caps,
+                    "already_attempted": counts,
+                    "required_upper_bound": dict(required),
+                },
+            )
 
     def _persist(self) -> None:
         temporary = self.path.with_suffix(".tmp")
@@ -227,7 +319,7 @@ class Ledger:
             "sequence": len(self.rows) + 1,
             "phase": self.phase,
             "kind": kind,
-            "model": MODELS[kind],
+            "model": self.models[kind],
             "input_count": input_count,
             "started_at": utc_now(),
             "completed_at": None,
@@ -242,8 +334,17 @@ class Ledger:
 
     def request(self, request: httpx.Request) -> None:
         payload = json.loads(request.content)
-        kind = "rerank" if "documents" in payload else "embedding" if "input" in payload else "chat"
-        inputs = payload.get("documents", payload.get("input", payload.get("tools", [])))
+        nested = payload.get("input")
+        if "documents" in payload:
+            kind, inputs = "rerank", payload["documents"]
+        elif isinstance(nested, dict) and "documents" in nested:
+            kind, inputs = "rerank", nested["documents"]
+        elif "input" in payload:
+            kind, inputs = "embedding", nested
+        else:
+            kind, inputs = "chat", payload.get("tools", [])
+        if payload.get("model") != self.models[kind]:
+            raise RunStopped("request model differs from configured accounting model")
         request.extensions["tuning_row"] = self.start(kind, len(inputs))
 
     def response(self, response: httpx.Response) -> None:
@@ -359,18 +460,11 @@ class Ledger:
                 or outgoing is None
                 or not row["complete_response"]
                 or row.get("usage_status", "reported") != "reported"
+                or kind not in self.prices
             ):
                 unknown += 1
                 continue
-            if kind == "chat":
-                if incoming <= 128_000:
-                    rate_in, rate_out = 0.8, 2.0
-                elif incoming <= 256_000:
-                    rate_in, rate_out = 2.4, 20.0
-                else:
-                    rate_in, rate_out = 4.8, 48.0
-            else:
-                rate_in, rate_out = 0.5, 0.0
+            rate_in, rate_out = self.prices[kind]
             cost += (incoming * rate_in + outgoing * rate_out) / 1_000_000
         return {
             "attempts": self.counts(),
@@ -379,7 +473,9 @@ class Ledger:
             "public_list_price_cny": None if unknown else round(cost, 10),
             "known_public_list_price_cny": round(cost, 10),
             "unknown_cost_requests": unknown,
-            "cost_scope": "Undiscounted public Beijing model prices, not the proxy invoice.",
+            "models": self.models,
+            "prices_cny_per_million_tokens": self.prices,
+            "cost_scope": "Caller-configured rates; missing prices remain unknown, not an invoice.",
         }
 
 

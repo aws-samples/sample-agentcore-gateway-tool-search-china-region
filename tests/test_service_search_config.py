@@ -117,7 +117,13 @@ def test_version_one_search_settings_remain_string_valued(field, value):
 
 @pytest.mark.parametrize("rerank", ["true", "false", "TRUE", "FALSE"])
 def test_service_and_model_settings_agree_on_existing_rerank_boolean(rerank):
-    values = {"MODEL_ALLOWED_HOSTS": "model.example.invalid", "MODEL_RERANK_ENABLED": rerank}
+    values = {
+        "MODEL_ALLOWED_HOSTS": "models.example.com",
+        "MODEL_EMBEDDING_MODEL": "example-embedding-model",
+        "MODEL_CHAT_MODEL": "example-chat-model",
+        "MODEL_RERANK_MODEL": "example-rerank-model",
+        "MODEL_RERANK_ENABLED": rerank,
+    }
     parsed = config.parse_search_config(values)
     models = ModelSettings.from_env(values)
     assert parsed.rerank_enabled is (models.rerank is not None)

@@ -1,26 +1,15 @@
-# 公开价格与 usage 口径
+# 历史费用估算与 usage 口径
 
-**这是合成数据上的真实模型参考结果，不代表质量验收，也不构成开启 rerank 的依据。**
+**这是合成数据上的历史真实模型参考结果，不代表质量验收，也不构成开启 rerank 的依据。**
 
-核对日期：2026-10-11。以下为百炼华北 2（北京）的人民币公开同步调用单价，按 provider 返回的 usage 估算；不代表代理账单，不扣免费额度或账户优惠，不使用异步 Batch 的半价。
+本报告记录 2026-10-11 实验的费用估算结论。模型身份未公开，本报告不列服务价目，原始账本未分发，因此公开材料不能完整重算该次估算。历史数值不代表新运行的报价，也不是实际账单。保留的用量与费用可用于推算有效费率，因此本文不承诺服务来源不可识别。
 
-| 模型 / 单次输入量 | 输入（元 / 百万 token） | 非思考输出（元 / 百万 token） | 思考输出，含思维链（元 / 百万 token） |
-| --- | ---: | ---: | ---: |
-| text-embedding-v4 | 0.5 | 不收费 | 不适用 |
-| qwen-plus：0 < input <= 128,000 | 0.8 | 2 | 8 |
-| qwen-plus：128,000 < input <= 256,000 | 2.4 | 20 | 24 |
-| qwen-plus：256,000 < input <= 1,000,000 | 4.8 | 48 | 64 |
+费用按每次请求的输入、输出 token 和适用费率分别计算后求和；若服务按单次输入量分档，应逐请求选择档位，不能按全局累计用量选择。公式为 `(input_tokens * input_rate + output_tokens * output_rate) / 1,000,000`。
 
-[百炼模型价格](https://help.aliyun.com/zh/model-studio/model-pricing)将 qwen-plus 当前能力对应到 qwen-plus-2025-12-01。阶梯按每个请求的输入总量选择，该请求全部 token 使用该档价格，K = 1,000，M = 1,000,000。官方别名对应关系不能证明代理实际使用的后端版本。
+Embedding 可使用返回的输入 token 计数；只有服务约定 total 表示全部输入时才以 `usage.total_tokens` 替代。Chat 分别计算输入与输出，`total_tokens` 不再相加。未知、非法或缺失 usage 不得按零用量处理。
 
-Embedding 按返回的 `usage.total_tokens` 计输入量，不能假定存在 `prompt_tokens`；官方文档说明 text-embedding-v4 仅返回 `total_tokens`。[同步向量 API](https://help.aliyun.com/zh/model-studio/text-embedding-synchronous-api)规定每批最多 10 条、每条最多 8,192 token，维度支持 2048、1536、1024（默认）、768、512、256、128、64。代理实际响应应单独核实。
+历史缓存敏感性情景假设命中输入按原价的 20% 计算，仅用于解释该次情景小计，不表示模型服务提供该折扣。缺少对应明细时不计算缓存优惠。
 
-Chat 使用 `usage.prompt_tokens` 和 `usage.completion_tokens`；`total_tokens` 是二者之和，不再重复相加。思考 token 已包含在输出 token 中，不额外叠加 `reasoning_tokens`。工具描述计入输入。[Chat API](https://help.aliyun.com/zh/model-studio/qwen-api-via-openai-chat-completions)、[工具调用](https://help.aliyun.com/zh/model-studio/qwen-function-calling)
+模型能力、单次输入上限、维度、批大小、JSON 和工具调用支持均须按实际服务验证。历史 200/500 工具调用成功不能当作其他服务的 API 上限或质量承诺。
 
-官方 qwen-plus 默认不启用思考；代理是否保留该默认值仍需依据实际请求与响应判断。[思考模式](https://help.aliyun.com/zh/model-studio/deep-thinking)
-
-按请求计算无缓存折扣的公开价：`(prompt_tokens * input_rate + completion_tokens * output_rate) / 1,000,000`；embedding 为 `total_tokens * 0.5 / 1,000,000`。未知或缺失 usage 不能按零用量处理。
-
-官方支持 qwen-plus 上下文缓存。隐式缓存自动运行且无法关闭；有缓存命中时，使用 `prompt_tokens_details.cached_tokens`，其输入价为标准输入价的 20%，其余输入按原价。显式缓存创建通常为 125%、命中为 10%，只有实际使用且返回对应明细时才应计算。如果代理未返回缓存明细，报告应注明“未计缓存折扣的公开价估算”，不能断言没有命中。[上下文缓存](https://help.aliyun.com/zh/model-studio/context-cache)
-
-已查的官方 Chat API 和 Function Calling 指南未给出 `tools` 数组的硬性数量上限；指南建议最终候选工具不超过 20 个，这是实践建议，不能解释为 20、128 或其他数量的 API 硬限制。200/500 工具的可用性由本次代理响应验证。[工具调用指南](https://help.aliyun.com/zh/model-studio/qwen-function-calling)
+新报告的汇总器只使用 `--prices-json` 提供的按角色划分的输入/输出固定单价，单位为人民币/百万 token；未配置价格时只汇总 usage，费用未知。单价应来自该模型服务的公开价目与合同，阶梯或复杂合同需另行核算。

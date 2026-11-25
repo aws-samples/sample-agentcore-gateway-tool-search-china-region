@@ -20,6 +20,9 @@ GATEWAY = GatewayIdentity("123456789012", "cn-north-1", "gateway-bounds")
 def settings(seconds=None):
     values = {
         "MODEL_ALLOWED_HOSTS": "bounds-model.invalid",
+        "MODEL_EMBEDDING_MODEL": "example-embedding-model",
+        "MODEL_CHAT_MODEL": "example-chat-model",
+        "MODEL_RERANK_MODEL": "example-rerank-model",
         "MODEL_EMBEDDING_DIMENSIONS": "2",
     }
     if seconds is not None:

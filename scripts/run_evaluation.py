@@ -65,18 +65,18 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--bootstrap-samples", type=int, default=1000)
     result.add_argument("--skip-knee", action="store_true")
     result.add_argument("--allow-host", action="append", default=[])
-    result.add_argument("--embedding-model", default="text-embedding-v4")
+    result.add_argument("--embedding-model", help="Required in real mode; no model default.")
     result.add_argument("--embedding-dimension", type=int, default=1024)
     result.add_argument("--embedding-path", default="/embeddings")
     result.add_argument("--embedding-batch-size", type=int, default=10)
-    result.add_argument("--chat-model", default="qwen-plus")
+    result.add_argument("--chat-model", help="Required in real mode; no model default.")
     result.add_argument("--chat-path", default="/chat/completions")
     result.add_argument("--model-revision", default="configured-eval-v1")
     result.add_argument("--timeout", type=float, default=30.0)
     result.add_argument("--chat-max-tokens", type=int, default=256)
     result.add_argument("--chat-max-request-bytes", type=int, default=2_000_000)
     result.add_argument("--enable-rerank", action="store_true")
-    result.add_argument("--rerank-model", default="qwen3-rerank")
+    result.add_argument("--rerank-model", help="Required in real mode; no model default.")
     result.add_argument("--rerank-path")
     result.add_argument(
         "--rerank-score-field", choices=("relevance_score", "score"), default="relevance_score"
@@ -193,6 +193,38 @@ def main(argv: list[str] | None = None) -> int:
             raise SystemExit("Real mode requires an explicit --allow-host.")
         if args.enable_rerank and not args.rerank_path:
             raise SystemExit("Real rerank requires an explicitly verified --rerank-path.")
+        required_models = ["embedding", "chat"] if not args.skip_knee else ["embedding"]
+        if args.enable_rerank:
+            required_models.append("rerank")
+        for role in required_models:
+            model = getattr(args, role + "_model")
+            if not isinstance(model, str) or not model.strip():
+                raise SystemExit(f"Real mode requires an explicit --{role}-model.")
+        embedding_config = EmbeddingConfig(
+            ModelProfile(args.embedding_model, args.model_revision, args.embedding_dimension),
+            args.embedding_path,
+            args.embedding_batch_size,
+            4096,
+        )
+        chat_config = (
+            ChatConfig(
+                ModelProfile(args.chat_model, args.model_revision),
+                args.chat_path,
+                args.chat_max_request_bytes,
+                max_tokens=args.chat_max_tokens,
+                json_mode=False,
+            )
+            if not args.skip_knee
+            else None
+        )
+        rerank_config = (
+            RerankConfig(
+                profile=ModelProfile(args.rerank_model, args.model_revision),
+                codec=RerankCodec(path=args.rerank_path, score_field=args.rerank_score_field),
+            )
+            if args.enable_rerank
+            else None
+        )
         planned_calls = planned_model_calls(
             data,
             query_count=len(selected.queries),
@@ -239,42 +271,18 @@ def main(argv: list[str] | None = None) -> int:
             embedding = OpenAIEmbeddingProvider(
                 client,
                 transport,
-                EmbeddingConfig(
-                    ModelProfile(
-                        args.embedding_model, args.model_revision, args.embedding_dimension
-                    ),
-                    args.embedding_path,
-                    args.embedding_batch_size,
-                    4096,
-                ),
+                embedding_config,
                 credential=credentials.api_key,
             )
             reranker = (
                 HTTPRerankProvider(
                     client,
                     transport,
-                    RerankConfig(
-                        profile=ModelProfile(args.rerank_model, args.model_revision),
-                        codec=RerankCodec(
-                            path=args.rerank_path, score_field=args.rerank_score_field
-                        ),
-                    ),
+                    rerank_config,
                     credential=credentials.api_key,
                 )
-                if args.enable_rerank
+                if rerank_config is not None
                 else None
-            )
-            selector = OpenAISelector(
-                client,
-                transport,
-                ChatConfig(
-                    ModelProfile(args.chat_model, args.model_revision),
-                    args.chat_path,
-                    args.chat_max_request_bytes,
-                    max_tokens=args.chat_max_tokens,
-                    json_mode=False,
-                ),
-                credential=credentials.api_key,
             )
             report = checkpointed(
                 args.output_dir,
@@ -292,7 +300,13 @@ def main(argv: list[str] | None = None) -> int:
                 bootstrap_samples=args.bootstrap_samples,
             )
             write_report(args.output_dir, "real-synthetic", report, render_markdown(report))
-            if not args.skip_knee:
+            if chat_config is not None:
+                selector = OpenAISelector(
+                    client,
+                    transport,
+                    chat_config,
+                    credential=credentials.api_key,
+                )
                 knee = checkpointed(
                     args.output_dir,
                     "real-knee",

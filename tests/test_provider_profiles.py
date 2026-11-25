@@ -32,33 +32,33 @@ def forbid_network(monkeypatch: pytest.MonkeyPatch) -> None:
     [
         (
             "proxy",
-            "https://proxy.fixture.invalid/v1",
+            "https://models.example.com/v1",
             "/embeddings",
             "/chat/completions",
             1024,
             "Authorization",
         ),
         (
-            "bailian",
-            "https://bailian.fixture.invalid",
-            "/compatible-mode/v1/embeddings",
-            "/compatible-mode/v1/chat/completions",
+            "origin",
+            "https://models.example.com",
+            "/v1/embeddings",
+            "/v1/chat/completions",
             1024,
             "Authorization",
         ),
         (
             "openai-compatible",
-            "https://compatible.fixture.invalid/tenant",
-            "/v1/embeddings",
-            "/v1/chat/completions",
+            "https://models.example.com/v1",
+            "/embeddings",
+            "/chat/completions",
             4,
             "api-key",
         ),
         (
             "vllm",
-            "https://vllm.fixture.invalid:8443/serving",
-            "/v1/embeddings",
-            "/v1/chat/completions",
+            "https://models.example.com/v1",
+            "/embeddings",
+            "/chat/completions",
             3,
             "Authorization",
         ),
@@ -92,7 +92,10 @@ def test_every_profile_exercises_expected_offline_wire_contract(
     assert ("dimensions" in embedding_fields) is (name != "vllm")
     assert ("encoding_format" in embedding_fields) is (name != "vllm")
     assert ("response_format" in chat_fields) is (name != "vllm")
-    assert ("enable_thinking" in chat_fields) is (name == "bailian")
+    expected_chat_fields = {"max_tokens", "messages", "model", "temperature"}
+    if name != "vllm":
+        expected_chat_fields.add("response_format")
+    assert set(chat_fields) == expected_chat_fields
     assert "offline-fixture-only" not in json.dumps(result)
 
 
@@ -110,22 +113,30 @@ def test_run_defaults_to_proxy_and_keeps_rerank_unconfigured() -> None:
     run = runpy.run_path(str(EXAMPLE))["run"]
     result = run()
     assert result["profile"] == "proxy"
-    assert result["embedding_model"] == "text-embedding-v4"
+    assert result["embedding_model"] == "example-embedding-model"
     assert [request["model"] for request in result["requests"]] == [
-        "text-embedding-v4",
-        "qwen-plus",
+        "example-embedding-model",
+        "example-chat-model",
     ]
     assert result["rerank_enabled"] is False
     assert result["rerank_candidate"] == {
-        "model": "qwen3-rerank",
+        "model": "example-rerank-model",
         "path": None,
         "status": "requires_live_probe",
     }
     assert result["embedding_dimension_basis"] == "configured fixture index space"
     assert len(result["requests"]) == 2
-    assert all("/v1/v1/" not in request["url"] for request in result["requests"])
-    assert all("compatible-mode" not in request["url"] for request in result["requests"])
-    assert "enable_thinking" not in result["requests"][1]["fields"]
+    assert [request["url"] for request in result["requests"]] == [
+        "https://models.example.com/v1/embeddings",
+        "https://models.example.com/v1/chat/completions",
+    ]
+    assert set(result["requests"][1]["fields"]) == {
+        "max_tokens",
+        "messages",
+        "model",
+        "response_format",
+        "temperature",
+    }
 
 
 def test_proxy_profile_requires_caller_supplied_transport() -> None:
@@ -146,9 +157,9 @@ def test_proxy_profile_preserves_exact_caller_host_and_allowlist() -> None:
     assert profile.transport is supplied
     assert profile.embedding.path == "/embeddings"
     assert profile.chat.path == "/chat/completions"
-    assert profile.embedding.profile.model_id == "text-embedding-v4"
+    assert profile.embedding.profile.model_id == "example-embedding-model"
     assert profile.embedding.profile.dimension == 1024
-    assert profile.chat.profile.model_id == "qwen-plus"
+    assert profile.chat.profile.model_id == "example-chat-model"
     assert profile.chat.extra_body == {}
 
 
@@ -178,7 +189,7 @@ def test_example_accepts_list_typed_chat_extensions() -> None:
     assert result["queries"] == ["取消未发货订单", "Find order cancellation"]
 
 
-@pytest.mark.parametrize("name", ["proxy", "bailian", "openai-compatible", "vllm"])
+@pytest.mark.parametrize("name", ["proxy", "origin", "openai-compatible", "vllm"])
 def test_example_chat_has_separate_timeout_and_can_finish_after_embedding_budget(
     name: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:

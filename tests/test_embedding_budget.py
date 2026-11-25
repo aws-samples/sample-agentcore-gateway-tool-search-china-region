@@ -38,6 +38,8 @@ EMBEDDING_FIELD = "MODEL_EMBEDDING_TIMEOUT_SECONDS"
 def model_values(seconds="0.45"):
     values = {
         "MODEL_ALLOWED_HOSTS": "budget-model.invalid",
+        "MODEL_CHAT_MODEL": "example-chat-model",
+        "MODEL_RERANK_MODEL": "example-rerank-model",
         "MODEL_EMBEDDING_MODEL": "budget-embedding",
         "MODEL_EMBEDDING_REVISION": "budget-v1",
         "MODEL_EMBEDDING_DIMENSIONS": "2",

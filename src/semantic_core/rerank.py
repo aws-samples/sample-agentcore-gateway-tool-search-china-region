@@ -43,18 +43,18 @@ from semantic_core.providers import (
 class RerankCodec:
     """An immutable choice of request envelope, response envelope, and score key.
 
-    ``flat`` uses query/documents/top_n and top-level results; ``bailian-native``
+    ``flat`` uses query/documents/top_n and top-level results; ``nested-output``
     uses input/parameters and output.results. Both return zero-based indices.
     The default path is a common convention, not a standards compatibility claim.
     """
 
     path: str = "/v1/rerank"
-    envelope: Literal["flat", "bailian-native"] = "flat"
+    envelope: Literal["flat", "nested-output"] = "flat"
     score_field: Literal["relevance_score", "score"] = "relevance_score"
 
     def __post_init__(self) -> None:
         validate_path(self.path)
-        if self.envelope not in ("flat", "bailian-native"):
+        if self.envelope not in ("flat", "nested-output"):
             raise ValueError("unsupported rerank envelope")
         if self.score_field not in ("relevance_score", "score"):
             raise ValueError("unsupported rerank score field")
@@ -62,7 +62,7 @@ class RerankCodec:
     def encode(
         self, model_id: str, query: str, texts: Sequence[str], top_n: int
     ) -> dict[str, object]:
-        if self.envelope == "bailian-native":
+        if self.envelope == "nested-output":
             return {
                 "model": model_id,
                 "input": {"query": query, "documents": list(texts)},
@@ -77,7 +77,7 @@ class RerankCodec:
         }
 
     def results(self, response: Mapping[str, object]) -> list[object]:
-        output = _object(response.get("output")) if self.envelope == "bailian-native" else response
+        output = _object(response.get("output")) if self.envelope == "nested-output" else response
         return _list(output.get("results"))
 
 
@@ -183,25 +183,21 @@ class HTTPRerankProvider(_HTTPProvider):
         return RerankResult(items, self._profile, usage)
 
 
-def bailian_rerank_config(model_id: str, revision: str, config_version: str = "v1") -> RerankConfig:
-    """Preserve historical direct presets; their paths remain unprobed."""
-    if model_id == "gte-rerank-v2":
-        codec = RerankCodec(
-            path="/api/v1/services/rerank/text-rerank/text-rerank",
-            envelope="bailian-native",
-        )
-        total = 30_000
-    elif model_id == "qwen3-rerank":
-        codec = RerankCodec(path="/compatible-api/v1/reranks")
-        total = 120_000
-    else:
-        raise ValueError("unsupported Bailian rerank model")
+def configured_rerank_config(
+    model_id: str,
+    revision: str,
+    config_version: str = "v1",
+    *,
+    codec: RerankCodec,
+    max_total_bytes: int = 30_000,
+) -> RerankConfig:
+    """Bind an explicit model to a codec without inferring routes from its name."""
     return RerankConfig(
         profile=ModelProfile(model_id, revision, config_version=config_version),
         codec=codec,
         max_documents=30,
         max_query_bytes=256,
         max_document_bytes=512,
-        max_total_bytes=total,
+        max_total_bytes=max_total_bytes,
         origin_only=True,
     )

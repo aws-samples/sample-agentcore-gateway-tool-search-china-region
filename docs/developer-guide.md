@@ -301,10 +301,10 @@ TF、文档长度、DF、IDF 和平均长度，并验证统计一致性，不重
 | `OpenAICompatibleConfig` | `base_url`、`allowed_hosts`、`timeout_seconds`、`max_response_bytes`、`auth_header_name`、`auth_header_format`、模型回显策略 |
 | `EmbeddingConfig` | `profile` 中的 model/revision/dimension/config_version，`path`、`max_batch`、`max_text_bytes`、`send_dimensions`、`encoding_format`、`extra_body` |
 | `ChatConfig` | `profile`、`path`、`max_text_bytes`、`max_tokens`、`temperature`、`json_mode`、`extra_body` |
-| `RerankConfig` / `RerankCodec` | 模型、路径、native/flat 格式、分数字段、候选数、query/文档/总字节预算 |
+| `RerankConfig` / `RerankCodec` | 模型、路径、`nested-output` / `flat` 格式、分数字段、候选数、query/文档/总字节预算 |
 
 `base_url` 可含 HTTPS 端口和路径前缀，`path` 追加到该前缀；例如
-`https://models.example:8443/tenant` 加 `/v1/embeddings`。路径不能替换 origin，
+`https://models.example.com/v1` 加 `/embeddings`。路径不能替换 origin，
 不能含 query/fragment 或目录跳转；host 必须精确列入 allowlist，重定向不跟随。
 所有文本上限明确按 UTF-8 字节计，不冒充模型 token 上限；超预算在发请求前拒绝。
 Embedding 的 `max_batch` 控制单次调用上限，adapter 不自动拆批或截断输入；
@@ -312,7 +312,7 @@ chat 的协议一次接收一个描述，生成条数仍受本地 schema 的 1�
 
 传输代码可以复用，**embedding 与 chat 必须分别配置超时预算**。
 通用 `HTTPConfig.timeout_seconds` 默认 `1.0` 秒，直接构造的
-`OpenAICompatibleConfig`、`BailianConfig` 会继承它，使用默认传输的低层 rerank
+`OpenAICompatibleConfig`、`OriginHTTPConfig` 会继承它，使用默认传输的低层 rerank
 调用也受影响。服务层独立设置 query embedding 1.0 秒、rerank 0.45 秒、
 document/chat 各 30 秒。通用默认值不能直接用于最多生成 2048 token 的 chat。
 每次 HTTP 尝试的有效预算取
@@ -324,7 +324,7 @@ schema 修复尝试及本地处理；embedding 保留原来的短超时。
 30/65 秒仅为示例预算，真实值须按模型输出上限与实测延迟配置，不保证生产服务可用性。
 该 chat 示例只替换自己的传输配置；离线 Enhancer 消费 LLM 协议。
 
-代理路径、已验证协议及探针范围见[模型接入](design.md#62-客户代理默认接入与可选百炼直连预设)；离线示例的低维 mock 配置只用于演示，不是部署维度。
+模型服务路径与配置验证要求见[模型接入](design.md#62-模型服务配置)；离线示例的低维 mock 配置只用于演示，不是部署维度。
 
 运行时认证由 Secrets Manager 提供，核心库仍由调用方注入：可以使用已配置的 `httpx.Client`，也可以设置
 `auth_header_name="Authorization"`、`auth_header_format="Bearer {token}"`，
@@ -341,28 +341,26 @@ key 文件或 Secrets。示例只使用固定的测试字符串；实际部署�
 修改原输入或读回的嵌套副本不影响后续请求。它不能覆盖 model、输入、维度、
 messages、流式或工具调用等受控字段。
 
-百炼直连由 `bailian_embedding_config(...)`、`bailian_chat_config(...)`、
-`bailian_rerank_config(...)` 提供可选预设，不用于客户代理的默认路由；
-只有直连 chat 预设发送 `enable_thinking=False`。
+`openai_embedding_config(...)` 和 `openai_chat_config(...)` 要求显式提供模型名；chat 还要求 revision。它们不附加服务专属请求字段。
+`configured_rerank_config(...)` 要求显式提供 `RerankCodec`，不根据模型名选择路由或预算。
 `send_dimensions=False`、`encoding_format=None`、`json_mode=False` 可分别省略对应字段。
-原 [bailian.py](../src/semantic_core/bailian.py) 保留兼容工厂名，返回通用 provider，
-不再保留独立的百炼解析实现。`BailianConfig` 保留旧的 origin/443 限制和 version
-回显检查，以保持既有百炼测试及调用用法；新服务使用 `OpenAICompatibleConfig`。
+[http_factories.py](../src/semantic_core/http_factories.py) 提供 `create_embedding_provider`、`create_chat_provider` 和 `create_rerank_provider`。
+`OriginHTTPConfig` 仅接受 HTTPS origin、443 端口，并启用可选的 version 回显检查；
+需要 URL 前缀或其他 HTTPS 端口时使用 `OpenAICompatibleConfig`。
 
 Usage 仅保留五种已知非负整数 token 计数；未知字段及 token-detail 子对象被忽略，
 已知计数字段类型非法仍拒绝响应。Chat 成功结果按字段累计初次尝试和 schema
 修复尝试返回的计数；缺失的计数不会由其他字段推算。Rerank 接口要求 `top_n == len(documents)`，
 返回全部候选的一一对应分数，供核心保持完整候选排序；该参数不是任意截断开关。
-`HTTPRerankProvider` 位于 [rerank.py](../src/semantic_core/rerank.py)，支持百炼原生
-`output.results` 和常见 Jina/Cohere 风格的扁平 `/v1/rerank`，`score_field` 显式选择
-`relevance_score` 或 `score`。它不是 OpenAI 标准接口，也不假设所有服务扩展都一致。
-两个百炼直连 rerank URL 保留为尚未真实探测的兼容预设。直接预设要求 transport
-使用无路径的 origin，防止与代理 `/v1` 前缀混用；保留字段大小写变体和多重编码
+`HTTPRerankProvider` 位于 [rerank.py](../src/semantic_core/rerank.py)，支持两种显式选择的格式：
+`nested-output` 使用 `input`/`parameters` 请求和 `output.results` 响应；`flat` 使用
+顶层 query/documents/top_n 和 results。`score_field` 显式选择 `relevance_score` 或 `score`。
+它不是 OpenAI 标准接口；路径、格式、模型和预算须按模型服务配置并验证。
+`http_factories.create_rerank_provider` 要求 `OriginHTTPConfig` 使用无路径 origin；服务运行时通过 `HTTPRerankProvider` 与 `OpenAICompatibleConfig` 保留 base URL 前缀；字段大小写变体和多重编码
 目录跳转均被拒绝。
-代理 rerank 的已测路由与预算边界见上述模型接入章节。
 
 [provider_profiles.py](../examples/provider_profiles.py) 默认使用 `proxy`，
-另保留 `bailian` 直连兼容示例、`openai-compatible` 和自托管 `vllm` 配置。
+另提供 `origin` 无前缀示例、`openai-compatible` 和自托管 `vllm` 配置。
 `select_profile("proxy", proxy_transport=...)` 要求显式传入地址/allowlist 配置；
 CLI 的 `run()` 为离线演示提供固定的 `.invalid` fixture 配置。
 示例中的未验证路由标记只描述该离线profile，不覆盖模型接入章节已测的代理配置。
@@ -370,7 +368,7 @@ CLI 的 `run()` 为离线演示提供固定的 `.invalid` fixture 配置。
 
 ```sh
 PYTHONPATH=src .venv/bin/python examples/provider_profiles.py
-PYTHONPATH=src .venv/bin/python examples/provider_profiles.py --profile bailian
+PYTHONPATH=src .venv/bin/python examples/provider_profiles.py --profile origin
 PYTHONPATH=src .venv/bin/python examples/provider_profiles.py --profile openai-compatible
 PYTHONPATH=src .venv/bin/python examples/provider_profiles.py --profile vllm
 ```
@@ -456,20 +454,20 @@ key 只保留在进程内存，不接收环境变量 key、文件 key 或其他�
 
 ```sh
 SEMANTIC_EVAL_REAL=1 PYTHONPATH=src .venv/bin/python scripts/run_evaluation.py \
-  --mode real --allow-host approved-model-host.example \
-  --embedding-model text-embedding-v4 --embedding-dimension 1024 \
-  --chat-model qwen-plus --query-limit 100 --queries-per-size 10 \
+  --mode real --allow-host models.example.com \
+  --embedding-model example-embedding-model --embedding-dimension 1024 \
+  --chat-model example-chat-model --query-limit 100 --queries-per-size 10 \
   --output-dir .local/real-reports
 ```
 
 base URL 的路径前缀由 transport 保留，默认追加 `/embeddings` 和
 `/chat/completions`。模型、revision、维度、路径、超时、批量大小和 chat 请求/输出
-预算均可配置，见`--help`；`--embedding-batch-size`默认10，与当前代理已测上限一致。
+预算均可配置，见`--help`；`--embedding-batch-size` 默认 10，部署前须验证模型服务的批量上限。
 默认真实评测取固定的 100 条分层查询，执行六组
 无 rerank 消融；示例仍为同一份已版本化的离线 mock 示例，不生成新的真实 LLM 示例。
 真实rerank需另加显式开关；对于采用`/v1` base 且支持下列路由的服务，可配置
 `--enable-rerank --rerank-path /rerank --rerank-score-field relevance_score`，
-模型默认`qwen3-rerank`，CLI使用flat codec。其它endpoint须提供各自已验证路由，
+模型名必须通过 `--rerank-model` 提供，CLI 使用 flat codec。其它endpoint须提供各自已验证路由，
 不能根据模型名称猜测或重复拼接`/v1`。
 该实验开关不改变核心的生产默认值，也不替代 rerank 启用批准。
 

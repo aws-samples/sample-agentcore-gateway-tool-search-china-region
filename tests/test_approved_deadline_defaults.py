@@ -13,8 +13,8 @@ from service.test_identity import context, event
 from test_embedding_budget import budget_service, model_values, read_timeout
 
 from semantic_core._http import HTTPConfig
-from semantic_core.bailian import BailianConfig
 from semantic_core.catalog import GatewayIdentity
+from semantic_core.http_factories import OriginHTTPConfig
 from semantic_core.openai_compatible import OpenAICompatibleConfig
 from semantic_core.search import SearchConfig
 from semantic_service.config import (
@@ -26,7 +26,7 @@ from semantic_service.deployment_config import parse_configuration
 from semantic_service.models import ModelSettings
 
 
-@pytest.mark.parametrize("factory", [HTTPConfig, OpenAICompatibleConfig, BailianConfig])
+@pytest.mark.parametrize("factory", [HTTPConfig, OpenAICompatibleConfig, OriginHTTPConfig])
 def test_default_transport_allows_one_second(factory):
     config = factory(
         base_url="https://budget-model.invalid", allowed_hosts=("budget-model.invalid",)

@@ -1,8 +1,7 @@
-"""Compatibility factories for Bailian presets of the generic HTTP providers.
+"""Factories for explicitly configured HTTP model providers.
 
-The old constructor spellings remain callable, but no supplier-specific provider
-class or parser is retained. New integrations use openai_compatible/rerank
-configuration directly. No factory creates a client or discovers credentials.
+OriginHTTPConfig restricts endpoints to HTTPS origins on port 443. Factories
+require model identities; callers supply clients, endpoints and credentials.
 """
 
 from __future__ import annotations
@@ -16,15 +15,15 @@ from semantic_core._http import HTTPConfig
 from semantic_core.openai_compatible import (
     OpenAIChatProvider,
     OpenAIEmbeddingProvider,
-    bailian_chat_config,
-    bailian_embedding_config,
+    openai_chat_config,
+    openai_embedding_config,
 )
-from semantic_core.rerank import HTTPRerankProvider, bailian_rerank_config
+from semantic_core.rerank import HTTPRerankProvider, RerankCodec, configured_rerank_config
 
 
 @dataclass(frozen=True)
-class BailianConfig(HTTPConfig):
-    """Legacy config retains origin-only URLs and optional version echo checks."""
+class OriginHTTPConfig(HTTPConfig):
+    """Origin-only HTTPS transport with optional version echo checks."""
 
     validate_version_echo: bool = True
 
@@ -32,15 +31,16 @@ class BailianConfig(HTTPConfig):
         super().__post_init__()
         parsed = urlsplit(self.base_url)
         if parsed.port not in (None, 443) or parsed.path not in ("", "/"):
-            raise ValueError("legacy Bailian config requires an HTTPS origin on port 443")
+            raise ValueError("origin HTTP config requires an HTTPS origin on port 443")
         if self.timeout_seconds > 30 or self.max_response_bytes > 10 * 1024 * 1024:
-            raise ValueError("invalid legacy adapter resource limit")
+            raise ValueError("invalid origin adapter resource limit")
 
 
-def BailianEmbeddingProvider(
+def create_embedding_provider(
     client: httpx.Client,
-    config: BailianConfig,
+    config: OriginHTTPConfig,
     *,
+    model_id: str,
     revision: str,
     config_version: str = "v1",
     credential: str | None = None,
@@ -48,35 +48,41 @@ def BailianEmbeddingProvider(
     return OpenAIEmbeddingProvider(
         client,
         config,
-        bailian_embedding_config(revision, config_version),
+        openai_embedding_config(revision, config_version, model_id=model_id),
         credential=credential,
     )
 
 
-def BailianLLMProvider(
+def create_chat_provider(
     client: httpx.Client,
-    config: BailianConfig,
+    config: OriginHTTPConfig,
     *,
+    model_id: str,
+    revision: str,
     config_version: str = "v1",
     credential: str | None = None,
 ) -> OpenAIChatProvider:
     return OpenAIChatProvider(
-        client, config, bailian_chat_config(config_version), credential=credential
+        client,
+        config,
+        openai_chat_config(config_version, model_id=model_id, revision=revision),
+        credential=credential,
     )
 
 
-def BailianRerankProvider(
+def create_rerank_provider(
     client: httpx.Client,
-    config: BailianConfig,
+    config: OriginHTTPConfig,
     *,
     model_id: str,
     revision: str,
+    codec: RerankCodec,
     config_version: str = "v1",
     credential: str | None = None,
 ) -> HTTPRerankProvider:
     return HTTPRerankProvider(
         client,
         config,
-        bailian_rerank_config(model_id, revision, config_version),
+        configured_rerank_config(model_id, revision, config_version, codec=codec),
         credential=credential,
     )

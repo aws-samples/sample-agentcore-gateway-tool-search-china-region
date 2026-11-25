@@ -594,6 +594,9 @@ def test_secret_role_separation_with_models_and_customer_kms(template, tmp_path)
         models_enabled=True,
         model_settings={
             "MODEL_ALLOWED_HOSTS": "models.example.invalid",
+            "MODEL_EMBEDDING_MODEL": "example-embedding-model",
+            "MODEL_CHAT_MODEL": "example-chat-model",
+            "MODEL_RERANK_MODEL": "example-rerank-model",
             "MODEL_EMBEDDING_DIMENSIONS": "4",
         },
         secrets={

@@ -225,7 +225,10 @@ def retrieval_report(real_data, mock_data):
         counts["empty"]["n"],
     )
     tools, gateways = real_data["metadata"]["tool_count"], real_data["metadata"]["gateway_count"]
-    label = lambda key: f"{key[0].upper()} / {'with' if key[1] else 'without'} examples"
+
+    def label(key):
+        return f"{key[0].upper()} / {'with' if key[1] else 'without'} examples"
+
     recalls = {
         key: real[key]["metrics"]["overall"]["primary"]["recall_at_5"]["value"]
         for key in configurations
@@ -261,14 +264,15 @@ def retrieval_report(real_data, mock_data):
         f"> **{DISCLAIMER}**",
         lead,
         (
-            f"Matched corpus: {tools} tools across {gateways} synthetic Gateways; {total} queries per "
-            + "configuration. Real vector retrieval uses `text-embedding-v4`; BM25 is local "
+            f"Matched corpus: {tools} tools across {gateways} synthetic Gateways; "
+            + f"{total} queries per configuration. Real vector retrieval uses "
+            + "the embedding model used in this experiment; BM25 is local "
             + "and therefore remains a lexical control. The mock embedding is a deterministic "
             + "regression fixture, not a simulation of real model quality. Rerank is disabled "
             + "in every real run. The mock baseline contains separate rerank rows; those rows "
             + "are excluded from this comparison. `configured-eval-v1` is a local configuration "
-            + "label, not a provider-pinned backend revision; the `text-embedding-v4` and "
-            + "`qwen-plus` aliases may evolve."
+            + "label, not a provider-pinned backend revision; the embedding and chat "
+            + "model aliases may evolve."
         ),
         (
             f"The primary comparison uses the same {total}-query deterministic evaluation "
@@ -277,7 +281,9 @@ def retrieval_report(real_data, mock_data):
             + "reweighting to the full dataset's stratum proportions."
         ),
         (
-            "Queries and descriptions share synthetic template vocabulary; there is no independent human holdout. The with-examples arm uses the dataset's fixed, versioned offline mock example "
+            "Queries and descriptions share synthetic template vocabulary; "
+            "there is no independent human holdout. The with-examples arm uses "
+            "the dataset's fixed, versioned offline mock example "
             + "queries. No actual LLM generated those examples during this run. This isolates "
             + "the effect of indexing those particular examples, and does not evaluate "
             + "live example generation."
@@ -291,7 +297,8 @@ def retrieval_report(real_data, mock_data):
         "## Retrieval quality and denominators",
         (
             f"Primary metrics use only the {primary} queries with 1–5 authorized relevant tools. "
-            + f"The other cohorts are {more} queries with more than 5 and {empty} with none. Truth is the "
+            + f"The other cohorts are {more} queries with more than 5 and {empty} with none. "
+            + "Truth is the "
             + "intersection of relevant tools and allowed tools. Recall@5 is macro recall; "
             + "Hit@5 indicates any relevant top-5 result; MRR@5 is truncated at rank 5. "
             + "Errors remain in denominators and contribute zero retrieval quality. Values "
@@ -329,11 +336,9 @@ def retrieval_report(real_data, mock_data):
         "theoretical_recall_ceiling"
     ]
     parts.append(
-        (
-            f"For the >5 cohort, the corpus-specific macro Recall@5 ceiling is {ci(ceiling)} "
-            + "because no more than five relevant tools can be returned. This cohort is kept "
-            + "separate from the primary denominator."
-        )
+        f"For the >5 cohort, the corpus-specific macro Recall@5 ceiling is {ci(ceiling)} "
+        + "because no more than five relevant tools can be returned. This cohort is kept "
+        + "separate from the primary denominator."
     )
     parts += [
         "## Paired effect of fixed examples",
@@ -368,7 +373,8 @@ def retrieval_report(real_data, mock_data):
         ),
         "## Errors, authorization, and empty truth",
         (
-            f"The following counts cover all {total} matched queries. Unauthorized results count every "
+            f"The following counts cover all {total} matched queries. "
+            + "Unauthorized results count every "
             + "returned tool outside the allowed set, including ranks after five."
         ),
         table(
@@ -423,7 +429,8 @@ def retrieval_report(real_data, mock_data):
             "Latency is warm local retrieval elapsed time, including query embedding provider "
             + "calls when used and retaining failed requests. Index build is excluded. "
             + "It is not Gateway end-to-end latency or a production network SLO; mock timing "
-            + f"has no provider round trip. p50/p95 use all {total} matched queries; units are milliseconds."
+            + f"has no provider round trip. p50/p95 use all {total} matched queries; "
+            + "units are milliseconds."
         ),
         table(
             [
@@ -496,7 +503,7 @@ def knee_report(real_data, mock_data):
     }
     crossings = [
         (left, right)
-        for left, right in zip(SIZES, SIZES[1:])
+        for left, right in zip(SIZES, SIZES[1:], strict=False)
         if latency_deltas[left] >= 0 > latency_deltas[right]
     ]
     faster = [str(size) for size in SIZES if latency_deltas[size] < 0]
@@ -506,7 +513,7 @@ def knee_report(real_data, mock_data):
     if crossings:
         brackets = ", ".join(f"{left} and {right}" for left, right in crossings)
         latency_summary = (
-            f"The observed p50 elapsed-latency crossover in favor of search first "
+            "The observed p50 elapsed-latency crossover in favor of search first "
             + f"is bracketed by {brackets} tools in the tested grid. "
         )
     else:
@@ -548,8 +555,9 @@ def knee_report(real_data, mock_data):
             + "catalog contains one authorized truth plus nested synthetic distractors. "
             + "Catalogs and queries are matched between real and mock modes and between "
             + "arms. The namespace prefix makes repeated CRUD functions distinguishable. "
-            + "Real selection uses `qwen-plus`; search first uses `text-embedding-v4` with "
-            + "configured RRF, followed by one selection chat over retrieved candidates. "
+            + "Real selection uses the chat model used in this experiment; "
+            + "search first uses the embedding model from the same experiment "
+            + "with configured RRF, followed by one selection chat over retrieved candidates. "
             + "Rerank remains disabled. No business tool is executed. `configured-eval-v1` "
             + "is a local configuration label, not a provider-pinned backend revision; "
             + "the model aliases may evolve."

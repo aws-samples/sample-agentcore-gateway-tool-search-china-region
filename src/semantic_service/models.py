@@ -46,6 +46,13 @@ from semantic_service.secrets import SecretError, SecretsCache, SecretValue
 T = TypeVar("T")
 
 
+def _required(env: Mapping[str, str], key: str) -> str:
+    value = env.get(key)
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{key} must be explicitly configured")
+    return value
+
+
 def _integer(env: Mapping[str, str], key: str, default: int | None = None) -> int:
     raw = env.get(key)
     if raw is None and default is None:
@@ -111,8 +118,10 @@ class ModelSettings:
             "embedding_timeout_seconds",
             validate_embedding_timeout_seconds(self.embedding_timeout_seconds),
         )
+        if isinstance(self.base_url, str) and not self.base_url.strip():
+            object.__setattr__(self, "base_url", None)
         # Validate all transport options before credentials or network access.
-        base = self.base_url or "https://" + self.allowed_hosts[0]
+        base = self.base_url if self.base_url is not None else "https://" + self.allowed_hosts[0]
         for timeout in (
             self.embedding_timeout_seconds,
             self.document_timeout_seconds,
@@ -143,7 +152,7 @@ class ModelSettings:
         version = source.get("MODEL_CONFIG_VERSION", "v1")
         embedding = EmbeddingConfig(
             ModelProfile(
-                source.get("MODEL_EMBEDDING_MODEL", "text-embedding-v4"),
+                _required(source, "MODEL_EMBEDDING_MODEL"),
                 source.get("MODEL_EMBEDDING_REVISION", "configured-v1"),
                 _integer(source, "MODEL_EMBEDDING_DIMENSIONS", 1024),
                 config_version=version,
@@ -159,7 +168,7 @@ class ModelSettings:
         )
         chat = ChatConfig(
             ModelProfile(
-                source.get("MODEL_CHAT_MODEL", "qwen-plus"),
+                _required(source, "MODEL_CHAT_MODEL"),
                 source.get("MODEL_CHAT_REVISION", "configured-v1"),
                 config_version=version,
             ),
@@ -171,26 +180,25 @@ class ModelSettings:
         )
         rerank = None
         if _boolean(source, "MODEL_RERANK_ENABLED"):
-            # The observed proxy secret base ends in /v1. Paths remain relative
-            # to that configured base; adding /v1 here would duplicate it.
+            # Paths are relative to the configured base, including any URL prefix.
             path = source.get("MODEL_RERANK_PATH", "/rerank")
             envelope = source.get("MODEL_RERANK_ENVELOPE", "flat")
             score_field = source.get("MODEL_RERANK_SCORE_FIELD", "relevance_score")
             if (
                 not path
-                or envelope not in ("flat", "bailian-native")
+                or envelope not in ("flat", "nested-output")
                 or score_field not in ("score", "relevance_score")
             ):
                 raise ValueError("enabled rerank requires a valid path, envelope and score field")
             rerank = RerankConfig(
                 ModelProfile(
-                    source.get("MODEL_RERANK_MODEL", "qwen3-rerank"),
+                    _required(source, "MODEL_RERANK_MODEL"),
                     source.get("MODEL_RERANK_REVISION", "configured-v1"),
                     config_version=version,
                 ),
                 RerankCodec(
                     path,
-                    cast(Literal["flat", "bailian-native"], envelope),
+                    cast(Literal["flat", "nested-output"], envelope),
                     cast(Literal["score", "relevance_score"], score_field),
                 ),
                 max_documents=_integer(source, "MODEL_RERANK_MAX_DOCUMENTS", 30),
@@ -242,11 +250,16 @@ class RotatingModelProviders:
 
     @timed("model.setup")
     def _transport(self, secret: SecretValue, timeout: float) -> tuple[HTTPConfig, str]:
-        raw_base = secret.value.get("base_url")
         key = secret.value.get("api_key")
-        if not isinstance(raw_base, str) or not isinstance(key, str):
+        if not isinstance(key, str):
             raise SecretError()
-        base = self._settings.base_url or raw_base
+        base = (
+            self._settings.base_url
+            if self._settings.base_url is not None
+            else secret.value.get("base_url")
+        )
+        if not isinstance(base, str) or not base.strip():
+            raise SecretError()
         transport = HTTPConfig(
             base,
             self._settings.allowed_hosts,
@@ -291,7 +304,7 @@ class RotatingModelProviders:
                 except ProviderError as error:
                     if error.code is not ErrorCode.AUTHENTICATION or attempt:
                         raise
-                    # 只在本次轮换中保留已观察的诊断，不写入跨请求缓存。
+                    # Retain diagnostics within this rotation only, never across requests.
                     authentication_failure = error.failure
                     context.remaining()
                     refreshed = self._refresh(secret)

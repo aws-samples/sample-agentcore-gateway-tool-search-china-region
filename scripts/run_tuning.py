@@ -51,6 +51,7 @@ from semantic_eval.tuning_runtime import (
     Ledger,
     RunStopped,
     claim_test,
+    endpoint_fingerprint,
     file_sha256,
     read_provenance,
     save_json,
@@ -291,6 +292,8 @@ def dev(
     recommendation = output / "recommendation.json"
     finished = utc_now()
     split_hash = file_sha256(output / "split-manifest.json")
+    model_path = output / "model-config.json"
+    model_hash = file_sha256(model_path) if model_path.exists() else None
     save_json(
         recommendation,
         {
@@ -308,6 +311,7 @@ def dev(
             ),
             "dev_finished_at": finished,
             "split_manifest_sha256": split_hash,
+            "model_config_sha256": model_hash,
         },
     )
     save_json(
@@ -316,9 +320,11 @@ def dev(
             "dev_finished_at": finished,
             "split_manifest_sha256": split_hash,
             "recommendation_sha256": file_sha256(recommendation),
+            "model_config_sha256": model_hash,
             "external_time_attestation": False,
             "next_step": (
-                "Externally capture recommendation.json, split-manifest.json and this boundary "
+                "Externally capture recommendation.json, split-manifest.json, model-config.json "
+                "and this boundary "
                 "before any test invocation. Pass the capture reference via --freeze-evidence-ref. "
                 "The runner cannot authenticate the reference or attest to external chronology."
             ),
@@ -479,6 +485,16 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--phase", choices=("dev", "test", "smoke"), required=True)
     parser.add_argument("--real", action="store_true")
+    parser.add_argument("--embedding-model")
+    parser.add_argument("--chat-model")
+    parser.add_argument("--rerank-model")
+    parser.add_argument("--embedding-dimension", type=int, default=1024)
+    parser.add_argument("--rerank-path", help="Verified path relative to the configured base URL")
+    parser.add_argument(
+        "--prices-json",
+        type=Path,
+        help="Optional JSON object: model role to [input, output] CNY per million tokens",
+    )
     parser.add_argument("--output-dir", type=Path, default=ROOT / "reports/tuning")
     parser.add_argument(
         "--freeze-evidence-ref",
@@ -503,6 +519,15 @@ def main() -> int:
         if args.real:
             if os.environ.get("SEMANTIC_EVAL_REAL") != "1" or args.phase == "smoke":
                 raise RunStopped("real mode requires explicit dual switches")
+            for role in ("embedding", "rerank", "chat"):
+                model = getattr(args, role + "_model")
+                if not isinstance(model, str) or not model.strip():
+                    raise RunStopped(f"real mode requires --{role}-model")
+                ModelProfile(model, "tuning-v1")
+            if not args.rerank_path:
+                raise RunStopped("real mode requires a verified --rerank-path")
+            RerankCodec(args.rerank_path)
+            ModelProfile(args.embedding_model, "tuning-v1", args.embedding_dimension)
         elif args.phase != "smoke":
             raise RunStopped("mock mode must use smoke and separate output")
         if args.phase in ("dev", "smoke"):
@@ -514,6 +539,32 @@ def main() -> int:
                 freeze_evidence_ref=args.freeze_evidence_ref,
             )
             SearchConfig(**read_provenance(output / "recommendation.json")["config"])
+        models = {
+            role: getattr(args, role + "_model") if args.real else "mock-" + role
+            for role in ("embedding", "rerank", "chat")
+        }
+        model_configuration = {
+            "models": models,
+            "revision": "tuning-v1" if args.real else "mock-v1",
+            "embedding_dimension": (
+                args.embedding_dimension
+                if args.real
+                else MockEmbeddingProvider().describe().dimension
+            ),
+            "paths": {
+                "embedding": "/embeddings",
+                "chat": "/chat/completions",
+                "rerank": args.rerank_path if args.real else None,
+            },
+        }
+        model_path = output / "model-config.json"
+        if model_path.exists():
+            stored_configuration = read_provenance(model_path)
+            stored_configuration.pop("endpoint_hmac_sha256", None)
+            if stored_configuration != model_configuration:
+                raise RunStopped("frozen model configuration mismatch")
+        elif args.phase == "test":
+            raise RunStopped("missing frozen model configuration")
         data = load_dataset(ROOT / "data/synthetic-v1.json")
         if args.phase == "smoke":
             # Use a small, truly disjoint mock split; never relabel dev queries as test.
@@ -522,11 +573,34 @@ def main() -> int:
         manifest_path = output / "split-manifest.json"
         if manifest_path.exists() and read_provenance(manifest_path) != manifest:
             raise RunStopped("frozen split mismatch")
-        ledger = Ledger(output)
+        prices = None if args.prices_json is None else read_provenance(args.prices_json)
+        ledger = Ledger(output, models=models, prices=prices)
         ledger.phase = "test" if args.phase == "test" else "dev"
-        ledger.preflight(
-            required_calls(heldout if args.phase == "test" else development, ledger.phase)
-        )
+        required = required_calls(heldout if args.phase == "test" else development, ledger.phase)
+        ledger.preflight(required, persist=False)
+        if args.real:
+            logging.disable(logging.CRITICAL)
+            credentials = load_credentials()
+            host = urlsplit(credentials.base_url).hostname
+            assert host is not None
+            transport = OpenAICompatibleConfig(
+                credentials.base_url,
+                (host,),
+                timeout_seconds=TIMEOUT,
+                max_response_bytes=4_000_000,
+                auth_header_name="Authorization",
+            )
+            endpoint_hash = endpoint_fingerprint(
+                transport.base_url,
+                ROOT / ".local/tuning-endpoint-salt",
+                create=not model_path.exists(),
+            )
+            model_configuration["endpoint_hmac_sha256"] = endpoint_hash
+            if model_path.exists() and read_provenance(model_path) != model_configuration:
+                raise RunStopped("frozen endpoint configuration mismatch")
+        if not model_path.exists():
+            save_json(model_path, model_configuration)
+        ledger.preflight(required)
         if not manifest_path.exists():
             save_json(manifest_path, manifest)
         execution_started = True
@@ -543,22 +617,6 @@ def main() -> int:
                 smoke=True,
             )
         else:
-            logging.disable(logging.CRITICAL)
-            credentials = load_credentials()
-            host = urlsplit(credentials.base_url).hostname
-            assert host is not None
-            transport = OpenAICompatibleConfig(
-                credentials.base_url,
-                (host,),
-                timeout_seconds=TIMEOUT,
-                max_response_bytes=4_000_000,
-                auth_header_name="Authorization",
-            )
-            # Probe-confirmed absolute route, independent of embedding/chat URL prefix.
-            origin = (
-                urlsplit(credentials.base_url)._replace(path="", query="", fragment="").geturl()
-            )
-            rerank_transport = replace(transport, base_url=origin)
             with (
                 httpx.Client(
                     trust_env=False,
@@ -571,7 +629,12 @@ def main() -> int:
                         client,
                         transport,
                         EmbeddingConfig(
-                            ModelProfile("text-embedding-v4", "tuning-v1", 1024),
+                            ModelProfile(
+                                args.embedding_model,
+                                "tuning-v1",
+                                args.embedding_dimension,
+                                config_version=endpoint_hash,
+                            ),
                             "/embeddings",
                             10,
                             4096,
@@ -582,9 +645,10 @@ def main() -> int:
                 )
                 reranker = HTTPRerankProvider(
                     client,
-                    rerank_transport,
+                    transport,
                     RerankConfig(
-                        ModelProfile("qwen3-rerank", "tuning-v1"), RerankCodec("/v1/rerank")
+                        ModelProfile(args.rerank_model, "tuning-v1", config_version=endpoint_hash),
+                        RerankCodec(args.rerank_path),
                     ),
                     credential=credentials.api_key,
                 )
@@ -592,12 +656,11 @@ def main() -> int:
                     client,
                     transport,
                     ChatConfig(
-                        ModelProfile("qwen-plus", "tuning-v1"),
+                        ModelProfile(args.chat_model, "tuning-v1", config_version=endpoint_hash),
                         "/chat/completions",
                         max_text_bytes=2_000_000,
                         max_tokens=256,
                         json_mode=False,
-                        extra_body={"enable_thinking": False},
                     ),
                     credential=credentials.api_key,
                 )

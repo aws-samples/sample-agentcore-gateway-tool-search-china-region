@@ -12,15 +12,15 @@ from semantic_core.openai_compatible import (
     EmbeddingConfig,
     OpenAIChatProvider,
     OpenAIEmbeddingProvider,
-    bailian_chat_config,
-    bailian_embedding_config,
+    openai_chat_config,
+    openai_embedding_config,
 )
 from semantic_core.providers import ModelProfile, RequestContext, RerankDocument
 from semantic_core.rerank import (
     HTTPRerankProvider,
     RerankCodec,
     RerankConfig,
-    bailian_rerank_config,
+    configured_rerank_config,
 )
 
 
@@ -168,13 +168,27 @@ def test_configuration_hash_agrees_with_nested_json_mapping_equality(kind):
 
 
 @pytest.mark.parametrize("kind", ["embedding", "chat", "rerank"])
-def test_bailian_presets_require_origin_base_at_library_boundary(kind):
+def test_configured_presets_require_origin_base_at_library_boundary(kind):
     transport = HTTPConfig("https://fixture.invalid/v1", ("fixture.invalid",))
     with httpx.Client(transport=httpx.MockTransport(lambda _: pytest.fail("sent"))) as client:
         with pytest.raises(ValueError, match="origin"):
             if kind == "embedding":
-                OpenAIEmbeddingProvider(client, transport, bailian_embedding_config("v1"))
+                OpenAIEmbeddingProvider(
+                    client,
+                    transport,
+                    openai_embedding_config("v1", model_id="example-embedding-model"),
+                )
             elif kind == "chat":
-                OpenAIChatProvider(client, transport, bailian_chat_config())
+                OpenAIChatProvider(
+                    client,
+                    transport,
+                    openai_chat_config(
+                        model_id="example-chat-model-v1", revision="example-chat-model-v1"
+                    ),
+                )
             else:
-                HTTPRerankProvider(client, transport, bailian_rerank_config("qwen3-rerank", "v1"))
+                HTTPRerankProvider(
+                    client,
+                    transport,
+                    configured_rerank_config("example-rerank-model", "v1", codec=RerankCodec()),
+                )

@@ -8,6 +8,7 @@ import json
 import sys
 from dataclasses import asdict, replace
 from datetime import UTC, datetime
+from functools import partial
 from pathlib import Path
 from types import ModuleType
 
@@ -19,7 +20,18 @@ from semantic_core.search import SearchConfig
 from semantic_eval.dataset import generate_dataset
 from semantic_eval.selection import MockSelector
 from semantic_eval.tuning import split_dataset
-from semantic_eval.tuning_runtime import Ledger, RunStopped, claim_test, save_json
+from semantic_eval.tuning_runtime import Ledger as RuntimeLedger
+from semantic_eval.tuning_runtime import RunStopped, claim_test, endpoint_fingerprint, save_json
+
+Ledger = partial(
+    RuntimeLedger,
+    models={
+        "embedding": "example-embedding-model",
+        "rerank": "example-rerank-model",
+        "chat": "example-chat-model",
+    },
+    prices={"embedding": (0.5, 0.0), "rerank": (0.5, 0.0), "chat": (0.8, 2.0)},
+)
 
 
 @pytest.fixture
@@ -142,13 +154,42 @@ def test_refused_real_phase_preserves_completed_evidence_before_credentials(
     monkeypatch.setattr(runner, "load_dataset", lambda _: data)
     monkeypatch.setattr(runner, "load_credentials", lambda: attempted.append(True))
     monkeypatch.setenv("SEMANTIC_EVAL_REAL", "1")
+    refusals: list[str] = []
+    guard_name = "guard_dev" if phase == "dev" else "validate_test_provenance"
+    guard = getattr(runner, guard_name)
+
+    def checked_guard(*args, **kwargs):
+        try:
+            return guard(*args, **kwargs)
+        except RunStopped as error:
+            refusals.append(str(error))
+            raise
+
+    monkeypatch.setattr(runner, guard_name, checked_guard)
     monkeypatch.setattr(
         sys,
         "argv",
-        ["run_tuning.py", "--phase", phase, "--real", "--output-dir", str(tmp_path)],
+        [
+            "run_tuning.py",
+            "--phase",
+            phase,
+            "--real",
+            "--output-dir",
+            str(tmp_path),
+            "--embedding-model",
+            "example-embedding-model",
+            "--chat-model",
+            "example-chat-model",
+            "--rerank-model",
+            "example-rerank-model",
+            "--rerank-path",
+            "/rerank",
+        ],
     )
     assert runner.main() == 1
     assert attempted == [], "refusal must occur before loading any credentials"
+    assert len(refusals) == 1
+    assert ("further tuning is forbidden" if phase == "dev" else "already claimed") in refusals[0]
     assert contents(tmp_path) == before
 
 
@@ -309,3 +350,128 @@ def test_mock_smoke_preserves_disjoint_partition_boundary(
     assert runner.main() == 0
     assert queries["dev"] and queries["test"]
     assert queries["dev"].isdisjoint(queries["test"])
+
+
+@pytest.mark.parametrize(
+    "override",
+    [
+        ["--embedding-dimension", "2"],
+        ["--embedding-model", "another-embedding-model"],
+        ["--chat-model", "another-chat-model"],
+        ["--rerank-path", "/another-rerank"],
+        [],
+    ],
+)
+def test_changed_model_configuration_refuses_before_credentials_and_claim(
+    runner: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    override: list[str],
+    tmp_path_factory: pytest.TempPathFactory,
+) -> None:
+    private_root = tmp_path_factory.mktemp("tuning-private")
+    monkeypatch.setattr(runner, "ROOT", private_root)
+    endpoint_hash = endpoint_fingerprint(
+        "https://original.example.com/v1", private_root / ".local/tuning-endpoint-salt", create=True
+    )
+    data = generate_dataset()
+    _, _, manifest = split_dataset(data)
+    recommendation = frozen_files(tmp_path, manifest)
+    model_path = tmp_path / "model-config.json"
+    save_json(
+        model_path,
+        {
+            "models": {
+                "embedding": "example-embedding-model",
+                "chat": "example-chat-model",
+                "rerank": "example-rerank-model",
+            },
+            "revision": "tuning-v1",
+            "endpoint_hmac_sha256": endpoint_hash,
+            "embedding_dimension": 1024,
+            "paths": {
+                "embedding": "/embeddings",
+                "chat": "/chat/completions",
+                "rerank": "/rerank",
+            },
+        },
+    )
+    model_hash = hashlib.sha256(model_path.read_bytes()).hexdigest()
+    frozen = json.loads(recommendation.read_text())
+    frozen["model_config_sha256"] = model_hash
+    save_json(recommendation, frozen)
+    boundary_path = tmp_path / "freeze-boundary.json"
+    boundary = json.loads(boundary_path.read_text())
+    boundary["model_config_sha256"] = model_hash
+    boundary["recommendation_sha256"] = hashlib.sha256(recommendation.read_bytes()).hexdigest()
+    save_json(boundary_path, boundary)
+    RuntimeLedger(
+        tmp_path,
+        models={
+            "embedding": "example-embedding-model",
+            "chat": "example-chat-model",
+            "rerank": "example-rerank-model",
+        },
+    )
+    before = contents(tmp_path)
+    refusals = []
+
+    class ObservedStop(RunStopped):
+        def __init__(self, message):
+            refusals.append(message)
+            super().__init__(message)
+
+    monkeypatch.setattr(runner, "RunStopped", ObservedStop)
+    if override:
+        monkeypatch.setattr(runner, "load_credentials", lambda: pytest.fail("credentials touched"))
+    else:
+        from semantic_eval.runtime import Credentials
+
+        monkeypatch.setattr(
+            runner,
+            "load_credentials",
+            lambda: Credentials("https://changed.example.com/v1", "fixture-key"),
+        )
+        monkeypatch.setattr(runner, "load_dataset", lambda _: data)
+        monkeypatch.setattr(runner.httpx, "Client", lambda **kw: pytest.fail("HTTP touched"))
+    monkeypatch.setenv("SEMANTIC_EVAL_REAL", "1")
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_tuning.py",
+            "--phase",
+            "test",
+            "--real",
+            "--output-dir",
+            str(tmp_path),
+            "--embedding-model",
+            "example-embedding-model",
+            "--chat-model",
+            "example-chat-model",
+            "--rerank-model",
+            "example-rerank-model",
+            "--rerank-path",
+            "/rerank",
+            "--freeze-evidence-ref",
+            "fixture-capture",
+            *override,
+        ],
+    )
+    assert runner.main() == 1
+    assert refusals == [
+        "frozen model configuration mismatch"
+        if override
+        else "frozen endpoint configuration mismatch"
+    ]
+    assert contents(tmp_path) == before
+
+
+def test_model_configuration_bytes_are_bound_to_freeze(tmp_path: Path) -> None:
+    recommendation = frozen_files(tmp_path)
+    model_path = tmp_path / "model-config.json"
+    save_json(model_path, {"embedding_dimension": 1024})
+    # A newly added or replaced configuration cannot retroactively bind old evidence.
+    with pytest.raises(RunStopped, match="model configuration provenance"):
+        claim_test(tmp_path, recommendation, freeze_evidence_ref="fixture-capture")
+    assert not (tmp_path / "test-claim.json").exists()

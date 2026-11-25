@@ -11,7 +11,7 @@ from semantic_core.catalog import GatewayIdentity, ToolIdentity, ToolRecord
 from semantic_core.openai_compatible import (
     ChatConfig,
     OpenAICompatibleConfig,
-    bailian_chat_config,
+    openai_chat_config,
 )
 from semantic_core.providers import (
     ErrorCode,
@@ -34,7 +34,10 @@ TRANSPORT = OpenAICompatibleConfig(
 
 
 def test_direct_provider_preset_rejects_proxy_prefix_before_network() -> None:
-    config = replace(bailian_chat_config(), json_mode=False)
+    config = replace(
+        openai_chat_config(model_id="example-chat-model-v1", revision="example-chat-model-v1"),
+        json_mode=False,
+    )
     assert config.origin_only is True
 
     # Callback is passed to the local mock transport below; it is not unused.
@@ -49,7 +52,14 @@ def test_direct_provider_preset_rejects_proxy_prefix_before_network() -> None:
 
 @pytest.mark.parametrize("direct", [True, False])
 def test_selector_preserves_valid_direct_origin_and_generic_proxy(direct: bool) -> None:
-    config = replace(bailian_chat_config(), json_mode=False) if direct else CONFIG
+    config = (
+        replace(
+            openai_chat_config(model_id="example-chat-model-v1", revision="example-chat-model-v1"),
+            json_mode=False,
+        )
+        if direct
+        else CONFIG
+    )
     transport = replace(TRANSPORT, base_url="https://offline.example") if direct else TRANSPORT
     expected_url = transport.base_url + config.path
 

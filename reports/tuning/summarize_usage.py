@@ -15,11 +15,6 @@ from pathlib import Path
 from typing import cast
 
 CAPS = {"embedding": 1500, "rerank": 1000, "chat": 500}
-MODELS = {
-    "embedding": "text-embedding-v4",
-    "rerank": "qwen3-rerank",
-    "chat": "qwen-plus",
-}
 PHASES = ("preflight", "dev", "test", "test-knee")
 TOKEN_KEYS = ("prompt_tokens", "input_tokens", "completion_tokens", "output_tokens", "total_tokens")
 ZERO = Decimal(0)
@@ -48,27 +43,37 @@ def _usage(value: object) -> tuple[dict[str, int], bool]:
     return tokens, valid
 
 
-def _price(kind: str, incoming: int, outgoing: int) -> Decimal:
-    if kind != "chat":
-        rate_in, rate_out = Decimal("0.5"), ZERO
-    elif incoming <= 128_000:
-        rate_in, rate_out = Decimal("0.8"), Decimal("2")
-    elif incoming <= 256_000:
-        rate_in, rate_out = Decimal("2.4"), Decimal("20")
-    else:
-        rate_in, rate_out = Decimal("4.8"), Decimal("48")
+def _price(kind: str, incoming: int, outgoing: int, prices: Mapping[str, object]) -> Decimal:
+    rates = prices.get(kind)
+    if (
+        not isinstance(rates, list | tuple)
+        or len(rates) != 2
+        or any(
+            isinstance(rate, bool)
+            or not isinstance(rate, int | float)
+            or not math.isfinite(rate)
+            or rate < 0
+            for rate in rates
+        )
+    ):
+        raise ValueError("invalid configured price")
+    rate_in, rate_out = Decimal(str(rates[0])), Decimal(str(rates[1]))
     return (incoming * rate_in + outgoing * rate_out) / MILLION
 
 
 def _independent_cost(
-    row: Mapping[str, object], kind: str, tokens: Mapping[str, int], valid: bool
+    row: Mapping[str, object],
+    kind: str,
+    tokens: Mapping[str, int],
+    valid: bool,
+    prices: Mapping[str, object],
 ) -> tuple[Decimal | None, str]:
     if row.get("complete_response") is not True:
         return None, "incomplete_response"
     if not valid or row.get("usage_status") == "invalid":
         return None, "invalid_usage"
-    if row.get("model", MODELS[kind]) != MODELS[kind]:
-        return None, "unsupported_model"
+    if "model" in row and (not isinstance(row["model"], str) or not row["model"].strip()):
+        return None, "invalid_model"
     for left, right in (
         ("prompt_tokens", "input_tokens"),
         ("completion_tokens", "output_tokens"),
@@ -91,7 +96,9 @@ def _independent_cost(
         return None, "invalid_cached_tokens"
     if row.get("usage_status", "reported") != "reported":
         return None, "recorded_usage_uncertainty"
-    return _price(kind, incoming, outgoing), ""
+    if kind not in prices:
+        return None, "missing_price"
+    return _price(kind, incoming, outgoing, prices), ""
 
 
 def _sensitivity_tokens(
@@ -102,7 +109,6 @@ def _sensitivity_tokens(
     if (
         valid
         and kind == "rerank"
-        and row.get("model", MODELS[kind]) == MODELS[kind]
         and row.get("complete_response") is True
         and row.get("usage_status", "reported") in ("reported", "inconsistent")
         and prompt > 0
@@ -151,8 +157,21 @@ class Group:
         }
 
 
-def build_audit(raw_rows: Sequence[object], summary: Mapping[str, object]) -> dict[str, object]:
+def build_audit(
+    raw_rows: Sequence[object],
+    summary: Mapping[str, object],
+) -> dict[str, object]:
     """Compute costs and reconcile source counters without importing Ledger."""
+    prices = (
+        _object(summary["prices_cny_per_million_tokens"])
+        if "prices_cny_per_million_tokens" in summary
+        else {}
+    )
+    if set(prices) - set(CAPS):
+        raise ValueError("unknown price role")
+    for kind in prices:
+        _price(kind, 0, 0, prices)
+    models = _object(summary["models"]) if "models" in summary else None
     groups: dict[tuple[str, str], Group] = {}
     sequence: list[object] = []
     counts = dict.fromkeys(CAPS, 0)
@@ -171,13 +190,16 @@ def build_audit(raw_rows: Sequence[object], summary: Mapping[str, object]) -> di
         tokens, valid = _usage(row.get("usage"))
         group.usage.update(tokens)
         reported_usage.setdefault(kind, Counter()).update(tokens)
-        cost, reason = _independent_cost(row, kind, tokens, valid)
+        if models is not None and row.get("model") != models.get(kind):
+            cost, reason = None, "model_mismatch"
+        else:
+            cost, reason = _independent_cost(row, kind, tokens, valid, prices)
         if cost is None:
             group.unknown_cost_requests += 1
             group.reasons[reason] += 1
             hypothetical = _sensitivity_tokens(row, kind, tokens, valid)
-            if hypothetical is not None:
-                group.sensitivity += _price("rerank", hypothetical, 0)
+            if hypothetical is not None and reason != "model_mismatch" and "rerank" in prices:
+                group.sensitivity += _price("rerank", hypothetical, 0, prices)
                 group.sensitivity_requests += 1
                 group.sensitivity_tokens += hypothetical
         else:
@@ -245,7 +267,9 @@ def build_audit(raw_rows: Sequence[object], summary: Mapping[str, object]) -> di
             )
         ],
         "reported_usage": {kind: dict(tokens) for kind, tokens in reported_usage.items()},
-        "price_scope": "Undiscounted public Beijing reference prices; proxy invoice unknown.",
+        "models": models or {},
+        "prices_cny_per_million_tokens": prices,
+        "price_scope": "Caller-configured rates; missing prices are unknown.",
         "clock_scope": "Sum of observed HTTP stage durations, including client instrumentation.",
     }
 
@@ -265,12 +289,17 @@ def render_markdown(audit: Mapping[str, object], directory: Path) -> str:
         "",
         "**合成数据，不代表质量验收。**",
         "",
-        (f"生成时间（UTC）：{audit['generated_at_utc']}。"
-        + f"记账一致性：{'通过' if audit['audit_passed'] else '失败'}。"
-        + f"费用结论：{'未知' if audit['public_list_price_cny'] is None else '公开价估算，非账单'}。"),
-        (f"按公开目录价折算的完整总额：**{exact}**；可计算部分：**¥{audit['known_public_list_price_cny']}**；"
-        + f"未知费用请求：**{audit['unknown_cost_requests']}**。"),
-        "此处均为北京公开参考价，不是代理账单；失败或中断请求仍计入调用上限。",
+        (
+            f"生成时间（UTC）：{audit['generated_at_utc']}。"
+            + f"记账一致性：{'通过' if audit['audit_passed'] else '失败'}。"
+            + "费用结论："
+            + ("未知。" if audit["public_list_price_cny"] is None else "公开价估算，非账单。")
+        ),
+        (
+            f"按公开目录价折算的完整总额：**{exact}**；可计算部分：**¥{audit['known_public_list_price_cny']}**；"
+            + f"未知费用请求：**{audit['unknown_cost_requests']}**。"
+        ),
+        "采用运行汇总中的显式单价；未配置单价的请求费用未知。不是代理账单。",
         "",
         "| 类型 | 实际 HTTP 尝试 | 授权上限 |",
         "|---|---:|---:|",
@@ -278,39 +307,50 @@ def render_markdown(audit: Mapping[str, object], directory: Path) -> str:
         "",
         "## 未解决的 rerank usage 矛盾",
         "",
-        ("`prompt_tokens=total_tokens>0` 与 `input_tokens=output_tokens=completion_tokens=0`"
-        + " 互相矛盾；保留未知状态，不把零值或非零值静默认定为真实账单输入。"),
+        (
+            "`prompt_tokens=total_tokens>0` 与 `input_tokens=output_tokens=completion_tokens=0`"
+            + " 互相矛盾；保留未知状态，不把零值或非零值静默认定为真实账单输入。"
+        ),
         "",
-        ("非账单敏感性情景：**假设**该矛盾中的 prompt/total 是计费输入，按 ¥0.50/百万 token 折算，"
-        + f"可另外计得 ¥{sensitivity['rerank_prompt_total_addition_cny']}；与已知部分相加的"
-        + f"**情景小计为 ¥{sensitivity['known_plus_sensitivity_subtotal_cny']}**。"
-        + f"该情景覆盖 {sensitivity['covered_unknown_requests']} 个未知请求，"
-        + f"仍未覆盖 {sensitivity['uncovered_unknown_requests']} 个。"
-        + "它不替代未知总额，也不构成账单。"),
+        (
+            "非账单敏感性情景：**假设**该矛盾中的 prompt/total 是计费输入，"
+            "按显式配置的单价折算，"
+            + f"可另外计得 ¥{sensitivity['rerank_prompt_total_addition_cny']}；与已知部分相加的"
+            + f"**情景小计为 ¥{sensitivity['known_plus_sensitivity_subtotal_cny']}**。"
+            + f"该情景覆盖 {sensitivity['covered_unknown_requests']} 个未知请求，"
+            + f"仍未覆盖 {sensitivity['uncovered_unknown_requests']} 个。"
+            + "它不替代未知总额，也不构成账单。"
+        ),
         "",
         "## 按阶段与类型拆分",
         "",
-        ("| 阶段 | 类型 | 尝试 | 完整响应 | 已知费用 CNY | 未知请求 |"
-        + " 情景追加 CNY | HTTP 阶段累计 ms |"),
+        (
+            "| 阶段 | 类型 | 尝试 | 完整响应 | 已知费用 CNY | 未知请求 |"
+            + " 情景追加 CNY | HTTP 阶段累计 ms |"
+        ),
         "|---|---|---:|---:|---:|---:|---:|---:|",
     ]
     for group in groups:
         lines.append(
-            (f"| {group['phase']} | {group['kind']} | {group['attempts']} |"
+            f"| {group['phase']} | {group['kind']} | {group['attempts']} |"
             + f" {group['complete_responses']} | {group['known_public_list_price_cny']} |"
             + f" {group['unknown_cost_requests']} | {group['sensitivity_addition_cny']} |"
-            + f" {float(cast(float, group['http_stage_ms_sum'])):.2f} |")
+            + f" {float(cast(float, group['http_stage_ms_sum'])):.2f} |"
         )
     lines.extend(
         [
             "",
-            ("HTTP 时间是已记录请求阶段耗时之和，包含客户端记账开销；不是整体运行墙钟时间，"
-            + "也不是纯服务端推理时延。未记录耗时的请求不会虚构零时延。"),
+            (
+                "HTTP 时间是已记录请求阶段耗时之和，包含客户端记账开销；不是整体运行墙钟时间，"
+                + "也不是纯服务端推理时延。未记录耗时的请求不会虚构零时延。"
+            ),
             "",
             "以下分别累加 provider 白名单字段；别名列保留原值，**不可跨列相加**。",
             "",
-            ("| 阶段 | 类型 | prompt_tokens | input_tokens | completion_tokens |"
-            + " output_tokens | total_tokens |"),
+            (
+                "| 阶段 | 类型 | prompt_tokens | input_tokens | completion_tokens |"
+                + " output_tokens | total_tokens |"
+            ),
             "|---|---|---:|---:|---:|---:|---:|",
         ]
     )
@@ -328,21 +368,32 @@ def render_markdown(audit: Mapping[str, object], directory: Path) -> str:
             "",
             *[f"- `{key}`：{'通过' if value else '失败'}。" for key, value in checks.items()],
             "",
-            ("独立重算未导入 Ledger 实现；核对序号连续且唯一、请求计数、授权/配置上限、"
-            + "各 token 字段及可计算费用。JSON 保存输入文件 SHA-256、固定状态与数值，"
-            + "不复制 provider 内容。"),
+            (
+                "独立重算未导入 Ledger 实现；核对序号连续且唯一、请求计数、授权/配置上限、"
+                + "各 token 字段及可计算费用。JSON 保存输入文件 SHA-256、固定状态与数值，"
+                + "不复制 provider 内容。"
+            ),
             "",
-            ("[原始记账](usage-ledger.jsonl) · "
-            + "[运行汇总](usage-cost.json) · "
-            + "[独立核对 JSON](usage-audit.json)"),
+            (
+                "[原始记账](usage-ledger.jsonl) · "
+                + "[运行汇总](usage-cost.json) · "
+                + "[独立核对 JSON](usage-audit.json)"
+            ),
             "",
-            ("公开单价来源：[text-embedding-v4](https://help.aliyun.com/en/model-studio/text-embedding-v4)、"
-            + "[qwen3-rerank](https://help.aliyun.com/en/model-studio/qwen3-rerank)、"
-            + "[qwen-plus](https://help.aliyun.com/en/model-studio/qwen-plus)。"
-            + "embedding/rerank 输入均为 ¥0.50/百万 token；qwen-plus 非思考输入/输出阶梯价为 "
-            + "¥0.80/2.00、¥2.40/20.00、¥4.80/48.00，不扣缓存、促销或免费额度。"),
         ]
     )
+    models = _object(audit["models"])
+    prices = _object(audit["prices_cny_per_million_tokens"])
+    lines += [
+        "单价由调用方按所选模型服务的公开价目提供，不扣优惠或免费额度。",
+        "",
+        "| 类型 | 模型 | 输入元/百万 token | 输出元/百万 token |",
+        "|---|---|---:|---:|",
+    ]
+    for kind in CAPS:
+        rates = prices.get(kind)
+        cells = f"{rates[0]} | {rates[1]}" if isinstance(rates, list | tuple) else "未知 | 未知"
+        lines.append(f"| {kind} | {models.get(kind, '未记录')} | {cells} |")
     return "\n".join(lines) + "\n"
 
 
@@ -361,10 +412,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         "usage-ledger.jsonl": hashlib.sha256(ledger_bytes).hexdigest(),
         "usage-cost.json": hashlib.sha256(summary_bytes).hexdigest(),
     }
-    (directory / "usage-audit.json").write_text(
-        json.dumps(audit, ensure_ascii=False, indent=2, allow_nan=False) + "\n", encoding="utf-8"
-    )
-    (directory / "usage-cost.md").write_text(render_markdown(audit, directory), encoding="utf-8")
+    encoded_json = json.dumps(audit, ensure_ascii=False, indent=2, allow_nan=False) + "\n"
+    encoded_markdown = render_markdown(audit, directory)
+    (directory / "usage-audit.json").write_text(encoded_json, encoding="utf-8")
+    (directory / "usage-cost.md").write_text(encoded_markdown, encoding="utf-8")
     print(json.dumps({"audit_passed": audit["audit_passed"], "records": audit["record_count"]}))
     return 0 if audit["audit_passed"] else 1
 
