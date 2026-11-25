@@ -84,7 +84,7 @@ sequenceDiagram
     participant M as 模型代理 / 模型服务
     A->>I: 按客户认证流程获取短期访问令牌
     I-->>A: JWT
-    A->>G: tools/call，query，字符串 id
+    A->>G: tools/call，query，字符串或整数 id
     G->>G: CUSTOM_JWT 入站认证
     G->>R: 请求体与 Authorization
     R->>I: 必要时读取配置的 discovery / JWKS

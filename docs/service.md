@@ -104,10 +104,44 @@ metadata 或完整约束形状：根和 `query` 不带说明，`_auth_context.de
 可选 `_auth_context` 由入口删除客户端值后覆盖。不要让客户端填写身份信息。
 运行时强制非空白query、最多2048 Unicode字符、封套最多8192字符，拒绝未知参数；
 HMAC验签、当前ACL及工具名、Gateway、target和MCP request ID绑定仍为必检项。
-外部客户端和内部 Indexer 的请求 ID
-只接受字符串；numeric、null、boolean均拒绝，不做字符串强转。通知不带 ID。
-Search封套进一步要求ID非空、最多256字符，并与Lambda context逐字相等。
-本服务的外部与后台 MCP 请求只接受字符串 ID，不在字符串和数字之间转换。
+外部客户端请求 ID 接受字符串或整数，拒绝浮点、null、boolean和复合类型；内部
+Indexer 仍生成字符串 ID，通知不带 ID。REQUEST 在授权读取和限流之前统一校验 ID：
+字符串须非空白、最多256字符且可编码为 UTF-8（拒绝孤立代理项），整数绝对值小于
+`10**256`。不合法 ID 归类为 `invalid input`，不会进入签名绑定或消耗授权读/限流。
+
+<a id="mcp-id-deployment-acceptance"></a>
+
+**MCP ID 部署验收。** [AWS Lambda target 文档](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-add-target-lambda.html)
+把 context 字段声明为 `"bedrockAgentCoreMcpMessageId": "string"`，并说明 Java 托管运行时将
+custom 反序列化为 `Map<String, String>`。公开文档指向目标 context 字符串化，不能将合成
+测试的类型保真夹具当成实际平台契约。签名始终保留原生 JSON 类型，整数 `1` 与字符串
+`"1"` 产生不同的签名绑定。验证先检查 HMAC 和有效期，再比较全部 claims；仅允许签名
+整数与其 canonical 十进制字符串 context 单向匹配，例如 `1` → `"1"`、`-1` → `"-1"`。
+不接受 `"01"`、`"+1"`、空白、反向字符串→整数、bool 或浮点；Gateway/target/tool、query
+摘要、主体和期限等验证均不跳过。该例外没有重写签名内容、回显 ID 或重放键。
+字符串化 context 已无法区分客户端原始数字与同值字符串；在此边界依赖已验签的原始 ID
+类型与其余绑定，而不声称恢复了 Gateway 丢失的类型信息。普通同类型匹配仍严格比较。
+部署验收必须分别运行数字与字符串 ID 的搜索调用，不能只测试 initialize/tools/list。
+全部封套校验通过且采用单向匹配时，仅日志记录 `binding_match="mcp_id_str_coerced"`。
+ECS 任务和 fallback Lambda 的 `operation=search_backend, phase=admission` 记录包含
+`backend`、`attempt_id`、`aws_request_id` 和 `correlation_id`；实际 Search 执行的
+`operation=search` 记录也可带该标记。facade 只做路由，其日志和私有传输响应均不带标记，
+工具响应也不带标记。字段不包含 ID、query、token 或元数据；它证明封套采用此匹配，
+不证明后续授权、模型调用或整个请求成功。任何其他 claim 校验失败均不产生成功标记。
+例如 `-(10**256-1)` 保留整数类型时有效，但其字符串化 context 长度为257，仍在验签前
+被长度门禁拒绝；缺少标记不能排除类型丢失。日志输出故障不改变认证或正常返回结果。
+
+`tools/list` 接受对象 `_meta` 和字符串 `cursor`；普通用户始终收到同一单页，无 `nextCursor`，
+机器身份的 cursor 继续透传。机器列表现在也拒绝 null/非对象 params、未知键、非字符串 cursor
+以及非对象 `_meta`。`tools/call` 接受对象 `_meta`，params 仅允许 name/arguments/_meta，
+**现在拒绝**此前会转发的未知键。两种方法的元数据均被忽略，不传入工具、不参与授权。
+普通用户保持先检查搜索权限、再校验 params 的顺序：无搜索权限主体的畸形 params 仍为
+`unauthorized`；ID 门禁对所有主体提前执行。
+私有路由的 `correlation_id` 对 `i:`（整数）或 `s:`（字符串）前缀加保留类型的 JSON 编码
+计算 SHA-256；facade、ECS 和 fallback 使用同一算法。新整数摘要不再等于旧算法对同值
+字符串的摘要；已有字符串 ID 摘要也会改变。facade 与 ECS 后端混合版本窗口内，同一请求
+的摘要可能不同，跨组件关联须等两端升级或使用平台请求 ID。历史检索须区分版本：旧算法可对
+任意字符串取摘要，前缀不能保证与所有旧输入全域隔离。封套的字符串 ID 签名格式保持兼容。
 REQUEST 接受缺席或 null 的 gatewayResponse，拒绝已填充的响应；覆盖客户端的签名上下文后继续验证。
 客户端依次检查 HTTP、JSON-RPC error 和 MCP isError，再解析 text JSON 中的 tools。
 这些契约由合成测试覆盖，实际 Gateway、IdP、alias 和签名链路仍需在目标环境验收。

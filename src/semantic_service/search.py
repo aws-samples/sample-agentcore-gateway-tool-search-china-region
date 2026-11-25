@@ -16,6 +16,7 @@ from semantic_core.providers import EmbeddingProvider, RequestContext, RerankPro
 from semantic_core.search import AuthorizationError as CoreAuthorizationError
 from semantic_core.search import SearchConfig, SearchDiagnostics, SearchEngine, SearchMode
 from semantic_core.snapshot import IndexSnapshot
+from semantic_service._mcp_id import require_mcp_id
 from semantic_service._search_contract import require_search, validate_arguments
 from semantic_service.auth import (
     AuthenticationError,
@@ -174,9 +175,7 @@ class SearchHandler:
                 or custom.get("bedrockAgentCoreToolName") != self.search_tool.name
             ):
                 raise AuthenticationError()
-            mcp_id = custom.get("bedrockAgentCoreMcpMessageId")
-            if type(mcp_id) is not str:
-                raise AuthenticationError()
+            mcp_id = require_mcp_id(custom.get("bedrockAgentCoreMcpMessageId"))
             binding = EnvelopeBinding(
                 self.search_tool.identity.gateway.gateway_id,
                 self.search_tool.identity.target_id,
@@ -185,6 +184,8 @@ class SearchHandler:
                 query,
             )
             verified = self.envelope.verify(arguments["_auth_context"], binding)
+        except AuthenticationError:
+            raise
         except Exception:
             raise AuthenticationError() from None
 

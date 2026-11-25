@@ -268,6 +268,7 @@ def test_request_artifact_has_only_its_locked_dependencies_and_source(
         "semantic_core": ("__init__.py", "_timing.py", "catalog.py", "py.typed"),
         "semantic_service": (
             "__init__.py",
+            "_mcp_id.py",
             "_request_prefetch.py",
             "_search_contract.py",
             "auth.py",

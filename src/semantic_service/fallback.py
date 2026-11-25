@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import hashlib
 import math
 import time
 from typing import cast
 
+from semantic_service._mcp_id import correlation_id, require_mcp_id
 from semantic_service.facade import (
     DeadlineExpired,
     LambdaContext,
@@ -40,9 +40,11 @@ def handler(event: object, context: object) -> dict[str, object]:
         request = decode_request(encode_json(event))
         attempt = request["attempt_id"]
         custom = cast(dict[str, object], request["custom"])
-        mcp_id = custom.get("bedrockAgentCoreMcpMessageId")
-        if isinstance(mcp_id, str) and len(mcp_id) <= 256:
-            correlation = hashlib.sha256(mcp_id.encode()).hexdigest()
+        try:
+            correlation = correlation_id(require_mcp_id(custom.get("bedrockAgentCoreMcpMessageId")))
+        except ValueError:
+            # Invalid context is classified by backend admission, not telemetry.
+            pass
         remaining = cast(LambdaContext, context).get_remaining_time_in_millis()
         if (
             type(remaining) not in (int, float)

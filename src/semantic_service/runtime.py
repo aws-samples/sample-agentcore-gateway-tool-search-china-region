@@ -35,6 +35,7 @@ from semantic_service.auth import (
     OIDCConfig,
     OIDCVerifier,
     ServiceError,
+    collect_binding_diagnostics,
     collect_oidc_attempts,
     collect_oidc_diagnostics,
 )
@@ -405,6 +406,7 @@ def _observed[T](
 
     with (
         collect_timings() as timings,
+        collect_binding_diagnostics() as binding_fields,
         collect_oidc_attempts(log_oidc_attempt if operation == "request" else None),
     ):
         try:
@@ -429,21 +431,25 @@ def _observed[T](
             logged_fields = dict(fields or {})
             if operation != "request" or not outcome_handled or "auth_failure" in auth_fields:
                 logged_fields.pop("auth_recovered", None)
-            print(
-                json.dumps(
-                    {
-                        "operation": operation,
-                        "status": status,
-                        "duration_ms": round((time.monotonic() - started) * 1000, 3),
-                        **logged_fields,
-                        "aws_request_id": request_id,
-                        "first_invocation": first_invocation,
-                        "runtime_module_init_ms": _RUNTIME_MODULE_INIT_MS,
-                        "stage_timings": stages,
-                        **auth_fields,
-                    }
-                )
+            payload = json.dumps(
+                {
+                    "operation": operation,
+                    "status": status,
+                    "duration_ms": round((time.monotonic() - started) * 1000, 3),
+                    **logged_fields,
+                    "aws_request_id": request_id,
+                    "first_invocation": first_invocation,
+                    "runtime_module_init_ms": _RUNTIME_MODULE_INIT_MS,
+                    "stage_timings": stages,
+                    **auth_fields,
+                    **binding_fields,
+                }
             )
+            try:
+                print(payload)
+            except Exception:  # nosec B110
+                # Optional logs cannot replace the result or authentication error.
+                pass
 
 
 def search_handler(event: object, context: object) -> dict[str, object]:

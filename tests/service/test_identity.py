@@ -278,9 +278,11 @@ def test_bootstrap_is_single_page_and_does_not_forward():
     }
 
 
-def test_bootstrap_rejects_cursor():
-    with pytest.raises(InputError):
-        interceptor()(interceptor_event("tools/list", params={"cursor": "opaque"}), None)
+def test_bootstrap_cursor_returns_same_single_page():
+    result = interceptor()(interceptor_event("tools/list", params={"cursor": "opaque"}), None)
+    assert result["mcp"]["transformedGatewayResponse"]["body"]["result"] == {
+        "tools": [SEARCH.descriptor]
+    }
 
 
 def test_business_tool_requires_full_identity_authorization():
@@ -396,11 +398,11 @@ def test_documented_gateway_fixture_round_trip():
 
 
 def test_exact_mcp_id_type_is_bound():
-    with pytest.raises(ValueError, match="MCP ID"):
-        replace(BINDING, mcp_id=1)
     binding = replace(BINDING, mcp_id="1")
     token = codec().issue(PRINCIPAL, binding, policy_epoch=1)
     assert codec().verify(token, binding).principal == PRINCIPAL
+    with pytest.raises(AuthenticationError):
+        codec().verify(token, replace(binding, mcp_id=1))
     with pytest.raises(AuthenticationError):
         codec().verify(token, replace(binding, mcp_id="01"))
 

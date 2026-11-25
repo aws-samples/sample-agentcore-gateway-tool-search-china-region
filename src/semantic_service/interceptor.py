@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import cast
 
 from semantic_core.catalog import ToolRecord
+from semantic_service._mcp_id import require_mcp_id
 from semantic_service._search_contract import require_search, validate_arguments
 from semantic_service.auth import (
     AuthenticationError,
@@ -84,11 +85,11 @@ class RequestInterceptor:
         if method == "notifications/initialized":
             if "id" in body:
                 raise InputError()
-        elif type(body.get("id")) is not str:
-            # Gateway converts numeric wire IDs to strings in Lambda context.
-            # Require strings before signing so that this conversion cannot
-            # collapse two distinct request identities into the same binding.
-            raise InputError()
+        else:
+            try:
+                require_mcp_id(body.get("id"))
+            except ValueError:
+                raise InputError() from None
         search_tool = self.config.search_tool
         gateway = search_tool.identity.gateway
         machine = (principal.issuer, principal.subject) in self.config.machine_principals
@@ -106,14 +107,31 @@ class RequestInterceptor:
         if machine:
             if method not in {"initialize", "notifications/initialized", "ping", "tools/list"}:
                 raise AuthorizationError()
+        else:
+            require_search(view, search_tool)
+        params: dict[str, object] = {}
+        if method in {"tools/list", "tools/call"}:
+            params = _object(body.get("params", {}))
+            allowed = (
+                {"_meta", "cursor"} if method == "tools/list" else {"_meta", "name", "arguments"}
+            )
+            if set(params) - allowed:
+                raise InputError()
+            if "_meta" in params:
+                _object(params["_meta"])
+                # Protocol metadata is not a tool argument or trusted identity.
+                params.pop("_meta")
+            if (
+                method == "tools/list"
+                and "cursor" in params
+                and not isinstance(params["cursor"], str)
+            ):
+                raise InputError()
+        if machine:
             return _forward(body)
-        require_search(view, search_tool)
         if method in {"initialize", "notifications/initialized", "ping"}:
             return _forward(body)
-        params = _object(body.get("params", {}))
         if method == "tools/list":
-            if params:
-                raise InputError()
             return {
                 "interceptorOutputVersion": "1.0",
                 "mcp": {
@@ -148,7 +166,7 @@ class RequestInterceptor:
                 gateway.gateway_id,
                 identity.target_id,
                 name,
-                cast(str, body["id"]),
+                cast(str | int, body["id"]),
                 cast(str, arguments["query"]),
             )
             arguments["_auth_context"] = self.envelope.issue(

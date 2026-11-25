@@ -60,6 +60,7 @@ REQUEST_SOURCE = {
     "semantic_core": ("__init__.py", "_timing.py", "catalog.py", "py.typed"),
     "semantic_service": (
         "__init__.py",
+        "_mcp_id.py",
         "_request_prefetch.py",
         "_search_contract.py",
         "auth.py",

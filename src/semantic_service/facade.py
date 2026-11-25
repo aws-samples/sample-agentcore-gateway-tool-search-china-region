@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import math
 import os
@@ -19,6 +18,7 @@ from functools import lru_cache
 from typing import Protocol, cast
 from urllib.parse import urlsplit
 
+from semantic_service._mcp_id import correlation_id
 from semantic_service.route_budget import (
     ECS_SECONDS,
     FALLBACK_RESERVE_SECONDS,
@@ -346,7 +346,7 @@ class Router:
                 )
             except ValueError:
                 raise AuthenticationError() from None
-            correlation = hashlib.sha256(mcp_id.encode()).hexdigest()
+            correlation = correlation_id(mcp_id)
             try:
                 remaining = cast(LambdaContext, context).get_remaining_time_in_millis()
                 if type(remaining) not in (int, float) or not math.isfinite(remaining):

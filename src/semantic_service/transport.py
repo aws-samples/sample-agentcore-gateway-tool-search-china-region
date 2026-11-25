@@ -11,6 +11,8 @@ from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import cast
 
+from semantic_service._mcp_id import require_mcp_id
+
 MAX_REQUEST_BYTES = 32768
 PUBLIC_RESPONSE_BYTES = 524288
 # Preserve the public Search cap while accommodating the private result envelope.
@@ -82,7 +84,7 @@ class RouteIdentity:
             os.environ["SEMSEARCH_SEARCH_TOOL_NAME"],
         )
 
-    def validate_custom(self, custom: object) -> str:
+    def validate_custom(self, custom: object) -> str | int:
         if not isinstance(custom, Mapping):
             raise ValueError("missing trusted context")
         expected = {
@@ -93,12 +95,9 @@ class RouteIdentity:
         }
         if any(custom.get(key) != value for key, value in expected.items()):
             raise ValueError("route identity mismatch")
-        mcp_id = custom.get("bedrockAgentCoreMcpMessageId")
-        if not isinstance(mcp_id, str) or not mcp_id.strip() or len(mcp_id) > 256:
-            raise ValueError("invalid MCP id")
-        return mcp_id
+        return require_mcp_id(custom.get("bedrockAgentCoreMcpMessageId"))
 
-    def context(self, mcp_id: str, deadline_ms: int | None = None) -> SimpleNamespace:
+    def context(self, mcp_id: str | int, deadline_ms: int | None = None) -> SimpleNamespace:
         custom = {
             "bedrockAgentCoreMessageVersion": "1.0",
             "bedrockAgentCoreGatewayId": self.gateway_id,

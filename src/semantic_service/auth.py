@@ -26,6 +26,7 @@ from botocore.exceptions import ClientError
 
 from semantic_core._timing import stage, timed
 from semantic_core.catalog import GatewayIdentity, ToolIdentity, canonical_json
+from semantic_service._mcp_id import require_mcp_id
 
 if TYPE_CHECKING:
     from semantic_service.storage import ControlRecord
@@ -40,6 +41,20 @@ _JWK_VALIDATION_COUNTS: ContextVar[tuple[int, dict[str, int]] | None] = ContextV
 _OIDC_ATTEMPTS: ContextVar[Callable[[dict[str, object]], None] | None] = ContextVar(
     "oidc_attempts", default=None
 )
+_BINDING_DIAGNOSTICS: ContextVar[dict[str, object] | None] = ContextVar(
+    "binding_diagnostics", default=None
+)
+
+
+@contextmanager
+def collect_binding_diagnostics() -> Iterator[dict[str, object]]:
+    """Collect fixed verification facts in this invocation only."""
+    fields: dict[str, object] = {}
+    token = _BINDING_DIAGNOSTICS.set(fields)
+    try:
+        yield fields
+    finally:
+        _BINDING_DIAGNOSTICS.reset(token)
 
 
 @contextmanager
@@ -740,15 +755,13 @@ class EnvelopeBinding:
     gateway_id: str
     target_id: str
     tool_name: str
-    mcp_id: str
+    mcp_id: str | int
     query: str
 
     def __post_init__(self) -> None:
         for value in (self.gateway_id, self.target_id, self.tool_name):
             _text(value)
-        if type(self.mcp_id) is not str:
-            raise ValueError("unsupported MCP ID")
-        _text(self.mcp_id, 256)
+        require_mcp_id(self.mcp_id)
         if not isinstance(self.query, str) or not self.query.strip() or len(self.query) > 2048:
             raise ValueError("invalid query")
 
@@ -757,7 +770,8 @@ class EnvelopeBinding:
             "gateway": self.gateway_id,
             "target": self.target_id,
             "tool": self.tool_name,
-            # Preserve exact string identity; never normalize numeric wire IDs.
+            # Canonical JSON keeps signed integers distinct from signed strings.
+            # Verification permits only canonical int-to-string context loss.
             "mcp_id": self.mcp_id,
             "query_hash": hashlib.sha256(self.query.encode("utf-8")).hexdigest(),
         }
@@ -852,7 +866,15 @@ class EnvelopeCodec:
                 or exp <= now - self.clock_skew
             ):
                 raise AuthenticationError()
+            signed_id = require_mcp_id(body.get("mcp_id"))
+            coerced = (
+                type(signed_id) is int
+                and type(binding.mcp_id) is str
+                and str(signed_id) == binding.mcp_id
+            )
             for name, value in binding.claims().items():
+                if name == "mcp_id" and coerced:
+                    continue
                 if type(body.get(name)) is not type(value) or body[name] != value:
                     raise AuthenticationError()
             _text(body["nonce"], 256)
@@ -866,7 +888,14 @@ class EnvelopeCodec:
             )
             if principal.expires_at < exp or principal.issued_at > iat + self.clock_skew:
                 raise AuthenticationError()
-            return VerifiedEnvelope(principal, _integer(body["epoch"]))
+            verified = VerifiedEnvelope(principal, _integer(body["epoch"]))
+            # Emit only after every claim passes; never log the token or IDs.
+            diagnostics = _BINDING_DIAGNOSTICS.get()
+            if coerced and diagnostics is not None:
+                diagnostics["binding_match"] = "mcp_id_str_coerced"
+            return verified
+        except AuthenticationError:
+            raise
         except Exception:
             raise AuthenticationError() from None
 

@@ -2,6 +2,8 @@
 
 ## 未发布：模型服务配置与迁移
 
+- MCP REQUEST 接受有界字符串或整数请求 ID，统一拒绝空白、超界及不可编码的 ID，保留类型回显与签名绑定；兼容 Inspector 的 `_meta` 和列表 cursor。为兼容 Gateway context 字符串化，全部封套校验通过后，允许签名整数与 canonical 十进制字符串 context 单向匹配；拒绝反向及非 canonical 写法，并记录仅日志的 `binding_match="mcp_id_str_coerced"`。数字 ID 搜索仍需部署验收。
+- 收紧 `tools/call` 未知 params 键和机器身份 `tools/list` params 校验；普通列表保持单页。私有路由日志摘要加入 ID 类型前缀，facade/ECS 混合版本期间关联值可能不同。
 - 启用模型时显式提供 `MODEL_EMBEDDING_MODEL`、`MODEL_CHAT_MODEL`；启用重排还需 `MODEL_RERANK_MODEL`。端点由非空 `MODEL_BASE_URL` 或 secret 的 `base_url` 提供，前者优先；空白环境值使用 secret，二者皆缺时模型调用报配置不可用。
 - 嵌套重排格式使用 `MODEL_RERANK_ENVELOPE=nested-output`，对应 `input`/`parameters` 请求及 `output.results` 响应；顶层格式继续使用 `flat`。
 - Python 调用方从 `semantic_core.http_factories` 导入 `OriginHTTPConfig`、`create_embedding_provider`、`create_chat_provider`、`create_rerank_provider`，替代 `semantic_core.bailian` 的配置与 provider 工厂。配置工厂使用 `openai_embedding_config`、`openai_chat_config`、`configured_rerank_config`，显式传入模型名、revision 及适用的 codec；不提供旧名称别名。

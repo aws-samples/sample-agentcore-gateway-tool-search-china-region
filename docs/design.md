@@ -122,7 +122,9 @@ flowchart LR
 
 官方 `context.client_context.custom` 列出的字段为 `bedrockAgentCoreMessageVersion`、`bedrockAgentCoreAwsRequestId`、`bedrockAgentCoreMcpMessageId`、`bedrockAgentCoreGatewayId`、`bedrockAgentCoreTargetId`、`bedrockAgentCoreToolName`。工具名从 `bedrockAgentCoreToolName` 读取；官方命名格式为 `${target_name}___${tool_name}`。Gateway/target/tool与部署allowlist必须匹配。[AWS-LAMBDA] [AWS-NAMING]
 
-本服务支持的 Lambda 事件使用 arguments 和六个受信任 context 字段。本服务的外部与Indexer内部MCP请求只使用字符串ID，numeric/null/boolean均拒绝，通知不带ID。Search封套进一步要求ID非空且最多256字符；签名/context仍逐字匹配，禁止有损强转。
+本服务支持的 Lambda 事件使用 arguments 和六个受信任 context 字段。外部 MCP 请求接受字符串或整数 ID，拒绝浮点、null、boolean与复合类型；Indexer内部请求仍生成字符串ID，通知不带ID。REQUEST 对全部方法统一要求字符串ID非空白、最多256字符且可编码为 UTF-8，整数绝对值小于 `10**256`；非法 ID 在授权读取与限流前拒绝。签名使用保留类型的 JSON 编码；验证保持同类型同值匹配，并仅允许经 HMAC 和有效期验证的签名整数匹配 canonical 十进制字符串 context。
+
+[AWS-LAMBDA] 的 context 格式把 `bedrockAgentCoreMcpMessageId` 声明为 `"string"`，同页说明 Java 托管运行时按 `Map<String, String>` 反序列化 custom。公开文档指向目标 context 字符串化；验证侧只允许签名整数→canonical 十进制字符串的单向兼容（例如 `1` → `"1"`），拒绝反向、`"01"`、`"+1"`、空白、bool及浮点；全部其他 claims 仍须通过。签名原始类型及重放键不变，字符串化 context 的原始 JSON 类型则无法恢复。合成夹具保留类型不代表平台保证，必须部署验收数字及字符串 ID 的搜索调用；只通过 initialize/tools/list 不足以证明 Inspector 搜索可用。全部封套验证成功后记录固定 `binding_match="mcp_id_str_coerced"`；该标记在 ECS/fallback admission 与 Search 执行日志中，facade 和私有响应不携带，也不保证后续搜索成功。诊断边界与验收条件见[服务配置](service.md#mcp-id-deployment-acceptance)。
 
 上述字段**没有文档承诺的用户 JWT、subject、groups 或 scopes**。Gateway execution role 也不是最终调用者身份。仅靠这些 context 字段无法进行用户级工具授权；第 7 节定义可信身份封套。
 
@@ -409,11 +411,11 @@ Lambda 的网络连通性不等于 Gateway authorizer 的连通性；若目标�
 
 interceptor删除客户端 `_auth_context` 的任何值，覆盖为schema已声明的可选string封套；含issuer/subject、必要scopes、Gateway/target、MCP request ID、query hash、policy epoch、iat/exp（最长30s）、nonce/key ID，以HMAC-SHA256签名并限制总长度≤8,192。签名 secret 与模型服务凭证分开。handler中该字段**运行时强制存在**，验签/有效期/请求/context绑定失败则拒绝，并读取当前权限。nonce仅作审计关联，不声称无状态实例能跨实例阻止重放；同一请求在TTL内重复仍须当前授权与入口限流。若客户需要严格一次性消费，另审批DynamoDB条件写去重及成本。
 
-三条路径已评估：隐藏字段依赖未公开validation行为；必填身份字段会迫使客户端填写；**可选声明+可信覆盖+handler必验**在schema构造上兼容注入前后，作为修订默认。实际schema可见该扩展，但业务adapter始终query-only。所有请求ID限制为字符串，包含内部Indexer；Search签名ID另外要求非空及长度上限。不做规范化强转，签名与context逐字匹配，通知不带ID。服务仍须验证生产签名覆盖、精确alias、CUSTOM_JWT/body/context和所有绕过负例；若签名身份不能可靠抵达或可绕过，则不能上线。接入方案改变时应重新评审全部信任边界。
+三条路径已评估：隐藏字段依赖未公开validation行为；必填身份字段会迫使客户端填写；**可选声明+可信覆盖+handler必验**在schema构造上兼容注入前后，作为修订默认。实际schema可见该扩展，但业务adapter始终query-only。外部请求ID接受有界字符串或整数，内部Indexer仍使用字符串；具体长度与编码限制见第3.3节。签名保留原始类型；除签名整数与canonical十进制字符串context的单向匹配外，类型和值均须相同，通知不带ID。该兼容仅在HMAC、期限及全部声明通过后生效，不接受反向匹配、bool或非canonical写法。服务仍须验证生产签名覆盖、精确alias、CUSTOM_JWT/body/context和所有绕过负例；若签名身份不能可靠抵达或可绕过，则不能上线。接入方案改变时应重新评审全部信任边界。
 
 授权存储将 `(issuer, subject/scopes/groups, gatewayId)` 映射为 tool allowlist/策略。默认拒绝；新工具没有映射时不可发现。权限在召回之前应用；外发 embedding query须符合调用方数据策略，rerank只发送授权候选；返回之前核当前 policy epoch，变更则重新过滤/检索。结果缓存默认关闭；后续开启必须绑定 Gateway、主体/权限指纹、catalog/model/tokenizer version、query digest 和当前 policy epoch。
 
-普通身份的 `tools/list` 在鉴权后的REQUEST阶段直接返回单页Search bootstrap，**无nextCursor，不请求后端全目录**；对不适用的cursor明确参数错误。Indexer身份才透传全量分页。默认不实现RESPONSE逐页ACL过滤，不要求任意客户端理解空页+cursor。MCP短路后的RESPONSE行为按官方MCP分支测试，不能把RESPONSE当作补齐页面或补救授权的路径。[AWS-INTERCEPT] 所有业务tools/call仍在REQUEST按完整tool identity授权，业务工具再校验资源权限；只有自有discovery adapter承诺调用通过Search发现的名称。
+普通身份的 `tools/list` 在鉴权后的REQUEST阶段直接返回单页Search bootstrap，**无nextCursor，不请求后端全目录**；接受字符串cursor并返回同一页，拒绝非字符串cursor。Indexer身份才透传全量分页。默认不实现RESPONSE逐页ACL过滤，不要求任意客户端理解空页+cursor。MCP短路后的RESPONSE行为按官方MCP分支测试，不能把RESPONSE当作补齐页面或补救授权的路径。[AWS-INTERCEPT] 所有业务tools/call仍在REQUEST按完整tool identity授权，业务工具再校验资源权限；只有自有discovery adapter承诺调用通过Search发现的名称。
 
 若 China 无 interceptor 或上述安全契约不能成立，备选是可信 OIDC/MCP proxy：仅 proxy 机器身份可调用 Gateway，终端用户凭证不能直接调用；proxy 负责身份验证、完整目录过滤、调用授权与签名封套。此模式明确采用两份 schema：proxy 对外暴露 query-only 工具；私有 Gateway Search target 的内部 schema 显式接受必填 `_auth_context`，不再依赖隐藏参数能力。proxy 将内部契约转换成统一外部契约，Indexer机器身份仍只能列目录。必须防止绕过（例如仅允许专属机器身份，不能保留可直连的用户 token 通路）。Search 仍挂在 Gateway 上。内部 schema/身份传递也无法成立时，按权限域拆分 Gateway，或停止多权限共享上线。**不采用无身份的 Search 加“以后补 ACL”。**
 

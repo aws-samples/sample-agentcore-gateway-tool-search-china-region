@@ -18,7 +18,7 @@ JWT 是身份服务签发的短期令牌。OIDC 提供身份元数据，JWKS 提
 | 2. REQUEST 验证 JWT | 使用显式 `OIDC_ISSUER`、`OIDC_AUDIENCE`、`OIDC_DISCOVERY_URI`、`OIDC_JWKS_URI`、`OIDC_ALLOWED_HOSTS`；检查算法、签名、必要 claims 和有效期 | 无效身份拒绝；身份依赖故障按内部故障拒绝，不放行过期公钥缓存 | [配置入口](../src/semantic_service/runtime.py)、[OIDC 验证](../src/semantic_service/auth.py) |
 | 3. 读取当前权限 | 按 issuer 与 subject 精确匹配策略；验证所需 scopes/groups、`disabled`、`not_before`、工具身份和 schema 摘要 | 未登记主体、撤销主体或不匹配工具拒绝 | [DDBAuthorizer](../src/semantic_service/auth.py) |
 | 4. REQUEST 改写 | 无条件删除客户端 `_auth_context`；Search 调用写入重新签名的封套；其他工具不携带此字段 | 不接受调用方自报身份 | [RequestInterceptor](../src/semantic_service/interceptor.py) |
-| 5. Search 验证封套 | 校验 HMAC 签名、期限和策略版本；逐字绑定 Gateway、target、工具名、字符串 MCP 请求 ID、查询摘要与可信 Lambda context | 缺失、伪造、过期或错绑封套均拒绝 | [EnvelopeCodec](../src/semantic_service/auth.py)、[SearchHandler](../src/semantic_service/search.py) |
+| 5. Search 验证封套 | 校验 HMAC 签名、期限和策略版本；绑定 Gateway、target、工具名、字符串或整数 MCP 请求 ID、查询摘要与可信 Lambda context；仅允许已验签整数与 canonical 十进制字符串 context 单向匹配，其余类型和值须一致 | 缺失、伪造、过期或错绑封套均拒绝 | [EnvelopeCodec](../src/semantic_service/auth.py)、[SearchHandler](../src/semantic_service/search.py) |
 | 6. Search 多次授权 | 加载前后检查权限；候选外发前和返回前继续复核；结果始终取允许集合的交集 | 权限缩小则过滤或拒绝；授权读取失败直接失败 | [服务搜索](../src/semantic_service/search.py)、[检索核心](../src/semantic_core/search.py) |
 | 7. 执行业务工具 | Agent 使用搜索返回的完整工具名发起新调用，仍经过 REQUEST 工具授权 | 无工具权限拒绝；业务系统还应验证具体资源权限 | [调用分派](../src/semantic_service/interceptor.py) |
 

@@ -274,10 +274,11 @@ CDK 显式发出 `SEMSEARCH_FUSION_STRATEGY=vector_bm25_fallback` 和
 对象 SHA-256、不可变 key 及函数配置绑定，须连同对应 Lambda 版本一起审核。
 核心库 `SearchConfig` 的 RRF 默认及 Gateway request/response 契约保持不变。
 
-Indexer配置`SEMSEARCH_MCP_VERSIONS=2025-03-26`，保留协商allowlist。所有外部请求及
-Indexer机器请求使用字符串JSON-RPC ID；numeric、null和boolean均拒绝，
-通知仍不带ID。Search封套进一步要求ID非空且最多256字符。
-不得把数值ID转换为字符串来绕过签名的精确绑定。
+Indexer配置`SEMSEARCH_MCP_VERSIONS=2025-03-26`，保留协商allowlist；Indexer仍生成字符串ID。
+外部请求接受字符串或整数 JSON-RPC ID；拒绝浮点、null、boolean及复合类型，通知不带ID。
+REQUEST 统一要求字符串非空白、最多256字符且可编码为 UTF-8，整数绝对值小于 `10**256`。
+AWS 文档指向目标 context 字符串化；验签仅额外接受签名整数对应的 canonical 十进制字符串，数字 ID 搜索须按
+[部署验收条件](service.md#mcp-id-deployment-acceptance)测试；不得跳过 HMAC、时效及其余绑定。
 若模型服务的 base URL 含 `/v1` 且已验证下列路由，可登记`MODEL_RERANK_PATH=/rerank`、
 `MODEL_RERANK_ENVELOPE=flat`、`MODEL_RERANK_SCORE_FIELD=relevance_score`，
 并保持`MODEL_RERANK_ENABLED=false`。不要重复拼接`/v1`或从模型名推断其它路由；
@@ -544,8 +545,9 @@ timeout 不是预置并发 Init 的固定平台时限，详见[服务配置](ser
   tombstone竞争时整体失败，初始化不能覆盖任一已有记录。
 - [ ] Gateway execution role只invoke指定Search/REQUEST alias；未绑定、错误Gateway、
   target、tool、MCP ID值、query摘要或过期封套均拒绝，客户端封套被覆盖。
-  外部与Indexer请求均只用字符串ID；numeric/null/boolean负例拒绝，字符串`"7"`
-  与签名/context逐字匹配；CUSTOM_JWT、header及alias的生产签名链路完成真实往返。
+  外部请求分别验收整数 `7` 与字符串 `"7"`，包含搜索 tools/call；Indexer仍使用字符串。
+  float/null/boolean/空白/超长/超界 ID 拒绝；验签仅额外允许整数→canonical 字符串单向匹配，
+  在 ECS/fallback admission 日志核对 `binding_match="mcp_id_str_coerced"`，私有响应与facade不携带；CUSTOM_JWT、header及alias签名链路完成真实往返。
 - [ ] Search实际metadata及授权schema hash一致；无长度/additionalProperties关键字时，
   运行时仍拒绝空白或超过2048字符的query、超过8192字符或无效的封套、未知参数，
   并验证HMAC、context绑定和当前ACL。不能用Gateway创建成功代替这些负例。

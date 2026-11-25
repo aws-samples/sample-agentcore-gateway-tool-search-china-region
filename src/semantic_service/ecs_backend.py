@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Protocol, cast
 from botocore.exceptions import ClientError
 
 from semantic_core.catalog import canonical_json
+from semantic_service._mcp_id import correlation_id
 from semantic_service._search_contract import validate_arguments
 from semantic_service.auth import (
     AuthenticationError,
@@ -28,6 +29,7 @@ from semantic_service.auth import (
     OIDCVerifier,
     ServiceError,
     TokenVerifier,
+    collect_binding_diagnostics,
 )
 from semantic_service.config import required
 from semantic_service.ecs_logging import emit_record, exception_record
@@ -79,7 +81,7 @@ class ClockSkew(ServiceError):
 @dataclass(frozen=True)
 class Admission:
     request: dict[str, object]
-    mcp_id: str
+    mcp_id: str | int
     backend: str
     deadline: int
     end: float
@@ -266,8 +268,28 @@ class Backend:
             mcp_id,
             cast(str, arguments["query"]),
         )
-        self.envelope.verify(arguments["_auth_context"], binding)
+        with collect_binding_diagnostics() as binding_fields:
+            self.envelope.verify(arguments["_auth_context"], binding)
         self._remaining(deadline, end)
+        if binding_fields:
+            record = {
+                "operation": "search_backend",
+                "phase": "admission",
+                "status": "ok",
+                "backend": backend,
+                "attempt_id": body["attempt_id"],
+                "aws_request_id": str(uuid.UUID(hex=cast(str, body["attempt_id"])))
+                if backend == "ecs"
+                else platform_request_id,
+                "correlation_id": correlation_id(mcp_id),
+                "timestamp_ms": int(time.time() * 1000),
+                **binding_fields,
+            }
+            try:
+                emit_record(record)
+            except Exception:  # nosec B110
+                # Optional output cannot change authenticated admission.
+                pass
         return Admission(
             cast(dict[str, object], request), mcp_id, backend, deadline, end, platform_request_id
         )
@@ -345,7 +367,7 @@ class Backend:
             attempt = cast(str, body["attempt_id"])
             if backend == "ecs":
                 request_id = str(uuid.UUID(hex=attempt))
-            correlation = hashlib.sha256(admitted.mcp_id.encode("utf-8")).hexdigest()
+            correlation = correlation_id(admitted.mcp_id)
             self._remaining(admitted.deadline, end)
             arguments = cast(dict[str, object], body["arguments"])
             self.replay.consume(cast(str, arguments["_auth_context"]), backend)

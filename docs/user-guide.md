@@ -24,7 +24,8 @@ Search 新建客户端、重复初始化协议或重复获取仍有效的 token�
 连接池大小按应用的实际并发上限设置，并在程序结束时关闭。服务端或网络关闭闲置连接后，
 客户端应允许正常重新建连；连接复用不保证任意闲置时长后 TCP/TLS 仍然存在。
 
-每次调用仍使用独立的原始字符串 JSON-RPC ID，正常执行令牌到期刷新和 MCP 错误检查。
+每次调用仍使用独立的字符串或整数 JSON-RPC ID，正常执行令牌到期刷新和 MCP 错误检查。
+数字 ID 的搜索调用须先完成[部署验收](service.md#mcp-id-deployment-acceptance)，本文示例使用字符串。
 连接复用不能替代授权，也不能在请求失败后盲目重复工具调用。性能测试应分别记录复用连接、
 新连接和闲置后的首批请求，避免把 TCP/TLS 建连时间当作 Search 计算时间。
 
@@ -126,7 +127,7 @@ HTTP 401 或 403 时，先核对令牌的用途、签发方、受众和到期时
 
 ### 1. 发现搜索工具
 
-初始化完成后发送以下 JSON 正文。请求头沿用上一节；`id` 必须是字符串。
+初始化完成后发送以下 JSON 正文。请求头沿用上一节；`id` 接受字符串或整数，本文使用字符串示例。
 
 ```json
 {
@@ -166,7 +167,7 @@ HTTP 401 或 403 时，先核对令牌的用途、签发方、受众和到期时
 | `query` | 传非空白字符串，说明想找的动作和资源 | 最多 2048 个 Unicode 字符，超过即拒绝 |
 | `_auth_context` | 始终省略 | 拦截器删除客户端同名值，重新写入签名字符串；Search 再验签和绑定 |
 | 其它搜索参数 | 不发送 | 运行时拒绝未知字段，包括客户端指定的 `top_k` |
-| JSON-RPC `id` | 每次调用使用字符串；搜索调用使用非空、最多 256 字符的值 | 不接受数字、布尔值或 `null`；搜索签名还要与 Gateway 上下文逐字匹配 |
+| JSON-RPC `id` | 使用非空白、最多 256 字符且可编码为 UTF-8 的字符串，或绝对值小于 `10**256` 的整数；数字 ID 搜索须部署验收 | 拒绝浮点、布尔值、`null` 和复合类型；仅额外允许已验签整数匹配 canonical 十进制字符串 context，反向或非 canonical 写法拒绝 |
 | 结果数量 | 由服务管理员配置 | `SEMSEARCH_TOP_K` 默认 5、上限 20；返回数量可能更少 |
 
 这些是[参数检查](../src/semantic_service/_search_contract.py)、[签名绑定](../src/semantic_service/auth.py)和[服务配置解析](../src/semantic_service/config.py)的限制，不是性能测量。不要修改回读 schema 来“补齐”长度关键字：schema 内容参与授权摘要，修改后可能导致拒绝。
@@ -321,14 +322,14 @@ embedding 是把文本转换成数字向量，以比较语义接近程度；BM25
 只读搜索可按应用等待预算采用有界退避重试；认证或授权拒绝应先核对身份与权限。
 有副作用的业务调用须先确认执行结果与该工具的幂等要求，不得仅因错误或超时自动重发。
 
-本项目没有为每个内部异常定义稳定的公开错误码。工具错误可能通过 `result.isError=true` 表示，因此 HTTP 200 不能单独证明工具成功，客户端也不能按错误文本猜测具体内部异常。
+REQUEST/Target 抛出的本地异常可能在客户端表现为 Gateway 通用错误/HTTP 500；本项目没有为每个内部异常定义稳定的公开错误码。工具错误可能通过 `result.isError=true` 表示，因此 HTTP 200 不能单独证明工具成功，客户端也不能按错误文本猜测具体内部异常。
 
 下表是供开发者与运维沟通的**本地异常及日志状态**，不是承诺会原样出现在 Gateway 响应中的错误码。
 
 | 本地异常 / `status` | 含义 | 下一步 |
 |---|---|---|
-| `InputError` / `invalid input` | 参数、请求形状或标识不合法 | 检查字符串 `id`、非空 `query`、长度和未知参数；修正后再调用 |
-| `AuthenticationError` / `unauthenticated` | 令牌或内部签名验证失败 | 检查令牌用途及有效期；持续失败交给身份管理员 |
+| `InputError` / `invalid input` | 参数、请求形状或标识不合法 | 检查字符串或整数 `id`、非空 `query`、长度和未知参数；修正后再调用 |
+| `AuthenticationError` / `unauthenticated` | 令牌或内部签名验证失败 | 检查令牌用途及有效期；若数字 ID 搜索全部 unauthenticated、字符串 ID 正常，排查 Gateway 丢失 ID 类型及混合版本部署；当前版本支持有界 canonical 单向匹配。ECS/fallback admission 或 Search 执行日志的 `binding_match="mcp_id_str_coerced"` 证明该次封套匹配成功，不代表整个搜索成功；facade 和私有响应不带此标记 |
 | `AuthorizationError` / `unauthorized` | 当前主体或工具不可用 | 请管理员核对搜索权限、业务权限及 schema 摘要；重试不能增加权限 |
 | `IndexNotReadyError` / `index not ready` | 没有可验证的当前索引 | 等待运维修复或发布索引；不能视作成功空列表 |
 | `RateLimitError` / `rate limited` | 主体当前分钟调用已达上限 | 降低并发和调用频率，在客户端设置有限重试 |
